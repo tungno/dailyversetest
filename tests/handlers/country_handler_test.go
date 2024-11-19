@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"proh2052-group6/internal/config"
 	"testing"
 
 	"proh2052-group6/internal/handlers"
@@ -52,7 +53,7 @@ func TestCountryHandler_GetCountries(t *testing.T) {
 	defer testServer.Close()
 
 	// Replace the CountriesAPIURL to point to our test server
-	originalCountriesAPIURL := services.CountriesAPIURL
+	originalCountriesAPIURL := config.CountriesAPIURL
 	services.SetCountriesAPIURL(testServer.URL)
 	defer services.SetCountriesAPIURL(originalCountriesAPIURL)
 
@@ -148,7 +149,7 @@ func TestCountryHandler_GetCountries_ExternalAPIError(t *testing.T) {
 	defer testServer.Close()
 
 	// Replace the CountriesAPIURL to point to our test server
-	originalCountriesAPIURL := services.CountriesAPIURL
+	originalCountriesAPIURL := config.CountriesAPIURL
 	services.SetCountriesAPIURL(testServer.URL)
 	defer services.SetCountriesAPIURL(originalCountriesAPIURL)
 

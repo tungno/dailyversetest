@@ -3,184 +3,128 @@ package handlers_test
 
 import (
 	"encoding/json"
-	"io/ioutil"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"testing"
 
 	"proh2052-group6/internal/handlers"
-	"proh2052-group6/internal/services"
+	"proh2052-group6/tests/mocks"
+
+	"github.com/stretchr/testify/assert"
 )
 
-func TestCityHandler_GetCities(t *testing.T) {
-	// Setup a test server to mock the external API
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Verify that the request method is POST
-		if r.Method != http.MethodPost {
-			t.Errorf("Expected POST request, got %s", r.Method)
-		}
-		// Read the request body
-		bodyBytes, err := ioutil.ReadAll(r.Body)
-		if err != nil {
-			t.Fatalf("Failed to read request body: %v", err)
-		}
-		defer r.Body.Close()
-		// Parse the request body
-		var requestBody map[string]string
-		err = json.Unmarshal(bodyBytes, &requestBody)
-		if err != nil {
-			t.Fatalf("Failed to unmarshal request body: %v", err)
-		}
-		// Check that the country parameter is correct
-		if requestBody["country"] != "TestCountry" {
-			t.Errorf("Expected country 'TestCountry', got '%s'", requestBody["country"])
-		}
-		// Respond with a mocked city list
-		cityResponse := struct {
-			Error bool     `json:"error"`
-			Msg   string   `json:"msg"`
-			Data  []string `json:"data"`
-		}{
-			Error: false,
-			Msg:   "Success",
-			Data:  []string{"City1", "City2", "City3"},
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cityResponse)
-	}))
-	defer testServer.Close()
-
-	// Replace the CitiesAPIURL to point to our test server
-	originalCitiesAPIURL := services.CitiesAPIURL
-	services.CitiesAPIURL = testServer.URL
-	defer func() {
-		services.CitiesAPIURL = originalCitiesAPIURL
-	}()
-
-	// Create the handler
-	cityHandler := handlers.NewCityHandler()
-
-	// Create a test request
-	req, err := http.NewRequest("GET", "/api/cities?country=TestCountry", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+func TestCityHandler_GetCities_WithCountryParam(t *testing.T) {
+	// Setup mock CityService
+	mockCityService := &mocks.MockCityService{
+		GetCitiesByCountryFunc: func(country string) ([]string, error) {
+			if country == "TestCountry" {
+				return []string{"City1", "City2", "City3"}, nil
+			}
+			return nil, fmt.Errorf("invalid country")
+		},
 	}
 
-	// Create a ResponseRecorder
+	// Setup mock UserService (not used since country is provided via query param)
+	mockUserService := &mocks.MockUserService{
+		// No methods need to be set for this test
+	}
+
+	// Initialize handler with mocks
+	cityHandler := handlers.NewCityHandler(mockCityService, mockUserService)
+
+	// Create test request with 'country' parameter
+	req, err := http.NewRequest("GET", "/api/cities?country=TestCountry", nil)
+	assert.NoError(t, err, "Failed to create request")
+
+	// Create ResponseRecorder
 	rr := httptest.NewRecorder()
 
-	// Call the handler
+	// Call handler
 	http.HandlerFunc(cityHandler.GetCities).ServeHTTP(rr, req)
 
-	// Check the status code
-	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
-	}
+	// Check status code
+	assert.Equal(t, http.StatusOK, rr.Code, "Handler should return status 200 OK")
 
-	// Check the response body
-	var cities []string
-	err = json.NewDecoder(rr.Body).Decode(&cities)
-	if err != nil {
-		t.Errorf("Failed to decode response body: %v", err)
-	}
+	// Check response body
+	var response map[string]interface{}
+	err = json.Unmarshal(rr.Body.Bytes(), &response)
+	assert.NoError(t, err, "Response should be valid JSON")
+
+	cities, ok := response["data"].([]interface{})
+	assert.True(t, ok, "Expected 'data' to be an array")
 
 	expectedCities := []string{"City1", "City2", "City3"}
-	if !equalStringSlices(cities, expectedCities) {
-		t.Errorf("Expected cities %v, got %v", expectedCities, cities)
+	assert.Equal(t, len(expectedCities), len(cities), "Number of cities mismatch")
+
+	for i, city := range expectedCities {
+		assert.Equal(t, city, cities[i].(string), fmt.Sprintf("Expected city '%s', got '%s'", city, cities[i].(string)))
 	}
 }
 
-func equalStringSlices(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
+func TestCityHandler_GetCities_WithoutCountryParam(t *testing.T) {
+	// Setup mock CityService (not used since country is provided)
+	mockCityService := &mocks.MockCityService{
+		GetCitiesByCountryFunc: func(country string) ([]string, error) {
+			// This should not be called in this test since 'country' is provided
+			return []string{}, nil
+		},
 	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
-}
 
-func TestCityHandler_GetCities_MissingCountry(t *testing.T) {
-	// Create the handler
-	cityHandler := handlers.NewCityHandler()
+	// Setup mock UserService (not used since 'country' is provided)
+	mockUserService := &mocks.MockUserService{}
 
-	// Create a test request without the country parameter
+	// Initialize handler with mocks
+	cityHandler := handlers.NewCityHandler(mockCityService, mockUserService)
+
+	// Create test request without 'country' parameter
 	req, err := http.NewRequest("GET", "/api/cities", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
-	}
+	assert.NoError(t, err, "Failed to create request")
 
-	// Create a ResponseRecorder
+	// Create ResponseRecorder
 	rr := httptest.NewRecorder()
 
-	// Call the handler
+	// Call handler
 	http.HandlerFunc(cityHandler.GetCities).ServeHTTP(rr, req)
 
-	// Check the status code
-	if status := rr.Code; status != http.StatusBadRequest {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusBadRequest)
-	}
+	// Check status code
+	assert.Equal(t, http.StatusBadRequest, rr.Code, "Handler should return status 400 Bad Request")
 
-	// Check the response body
+	// Check response body
 	expectedError := "Missing country parameter\n"
-	if rr.Body.String() != expectedError {
-		t.Errorf("Expected error message '%s', got '%s'", expectedError, rr.Body.String())
-	}
+	assert.Equal(t, expectedError, rr.Body.String(), "Error message should match")
 }
 
 func TestCityHandler_GetCities_ExternalAPIError(t *testing.T) {
-	// Setup a test server to mock the external API
-	testServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		// Respond with an error
-		cityResponse := struct {
-			Error bool     `json:"error"`
-			Msg   string   `json:"msg"`
-			Data  []string `json:"data"`
-		}{
-			Error: true,
-			Msg:   "Country not found",
-			Data:  nil,
-		}
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(cityResponse)
-	}))
-	defer testServer.Close()
-
-	// Replace the CitiesAPIURL to point to our test server
-	originalCitiesAPIURL := services.CitiesAPIURL
-	services.CitiesAPIURL = testServer.URL
-	defer func() {
-		services.CitiesAPIURL = originalCitiesAPIURL
-	}()
-
-	// Create the handler
-	cityHandler := handlers.NewCityHandler()
-
-	// Create a test request
-	req, err := http.NewRequest("GET", "/api/cities?country=UnknownCountry", nil)
-	if err != nil {
-		t.Fatalf("Failed to create request: %v", err)
+	// Setup mock CityService to return an error
+	mockCityService := &mocks.MockCityService{
+		GetCitiesByCountryFunc: func(country string) ([]string, error) {
+			return nil, fmt.Errorf("error fetching cities: country not found")
+		},
 	}
 
-	// Create a ResponseRecorder
+	// Setup mock UserService (not used since country is provided via query param)
+	mockUserService := &mocks.MockUserService{
+		// No methods need to be set for this test
+	}
+
+	// Initialize handler with mocks
+	cityHandler := handlers.NewCityHandler(mockCityService, mockUserService)
+
+	// Create test request with invalid 'country' parameter
+	req, err := http.NewRequest("GET", "/api/cities?country=UnknownCountry", nil)
+	assert.NoError(t, err, "Failed to create request")
+
+	// Create ResponseRecorder
 	rr := httptest.NewRecorder()
 
-	// Call the handler
+	// Call handler
 	http.HandlerFunc(cityHandler.GetCities).ServeHTTP(rr, req)
 
-	// Check the status code
-	if status := rr.Code; status != http.StatusInternalServerError {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusInternalServerError)
-	}
+	// Check status code
+	assert.Equal(t, http.StatusInternalServerError, rr.Code, "Handler should return status 500 Internal Server Error")
 
-	// Check the response body
+	// Check response body
 	expectedError := "Error fetching cities\n"
-	if rr.Body.String() != expectedError {
-		t.Errorf("Expected error message '%s', got '%s'", expectedError, rr.Body.String())
-	}
+	assert.Equal(t, expectedError, rr.Body.String(), "Error message should match")
 }

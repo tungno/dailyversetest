@@ -2,16 +2,23 @@
 package handlers
 
 import (
-	"encoding/json"
 	"net/http"
 
 	"proh2052-group6/internal/services"
+	"proh2052-group6/pkg/utils"
 )
 
-type CityHandler struct{}
+type CityHandler struct {
+	CityService services.CityServiceInterface
+	UserService services.UserServiceInterface
+}
 
-func NewCityHandler() *CityHandler {
-	return &CityHandler{}
+// NewCityHandler initializes a new CityHandler with injected services
+func NewCityHandler(cs services.CityServiceInterface, us services.UserServiceInterface) *CityHandler {
+	return &CityHandler{
+		CityService: cs,
+		UserService: us,
+	}
 }
 
 func (ch *CityHandler) GetCities(w http.ResponseWriter, r *http.Request) {
@@ -21,11 +28,15 @@ func (ch *CityHandler) GetCities(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	cities, err := services.GetCitiesByCountry(country)
+	cities, err := ch.CityService.GetCitiesByCountry(country)
 	if err != nil {
 		http.Error(w, "Error fetching cities", http.StatusInternalServerError)
 		return
 	}
 
-	json.NewEncoder(w).Encode(cities)
+	// Wrap the cities in a 'data' field
+	response := map[string]interface{}{
+		"data": cities,
+	}
+	utils.WriteJSON(w, response)
 }

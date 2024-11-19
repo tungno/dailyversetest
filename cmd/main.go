@@ -46,6 +46,7 @@ func main() {
 	journalService := services.NewJournalService(journalRepository)
 	newsService := services.NewNewsService(userRepository)
 	profileService := services.NewProfileService(userRepository)
+	cityService := services.NewCityService()
 
 	// Initialize handlers
 	userHandler := handlers.NewUserHandler(userService)
@@ -55,7 +56,7 @@ func main() {
 	newsHandler := handlers.NewNewsHandler(newsService)
 	profileHandler := handlers.NewProfileHandler(profileService)
 	countryHandler := handlers.NewCountryHandler()
-	cityHandler := handlers.NewCityHandler()
+	cityHandler := handlers.NewCityHandler(cityService, userService)
 
 	// Setup router
 	router := mux.NewRouter()

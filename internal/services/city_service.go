@@ -6,32 +6,40 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"proh2052-group6/internal/config"
 )
 
-var (
-	cityHTTPClient = http.DefaultClient
-	CitiesAPIURL   = "https://countriesnow.space/api/v0.1/countries/cities"
-)
-
-func SetCityHTTPClient(client *http.Client) {
-	cityHTTPClient = client
+// CityServiceInterface defines the methods for CityService
+type CityServiceInterface interface {
+	GetCitiesByCountry(country string) ([]string, error)
 }
 
-func SetCitiesAPIURL(url string) {
-	CitiesAPIURL = url
+// CityService implements CityServiceInterface
+type CityService struct {
+	HTTPClient   *http.Client
+	CitiesAPIURL string
 }
 
-func GetCitiesByCountry(country string) ([]string, error) {
+// NewCityService initializes a new CityService
+func NewCityService() CityServiceInterface {
+	return &CityService{
+		HTTPClient:   http.DefaultClient,
+		CitiesAPIURL: config.CitiesAPIURL,
+	}
+}
+
+// GetCitiesByCountry fetches cities for a given country
+func (cs *CityService) GetCitiesByCountry(country string) ([]string, error) {
 	// Create the request body for the external API
 	requestBody, err := json.Marshal(map[string]string{"country": country})
 	if err != nil {
-		return nil, fmt.Errorf("Failed to create request body: %v", err)
+		return nil, fmt.Errorf("failed to create request body: %v", err)
 	}
 
 	// Make a POST request to the external API
-	resp, err := cityHTTPClient.Post(CitiesAPIURL, "application/json", bytes.NewBuffer(requestBody))
+	resp, err := cs.HTTPClient.Post(cs.CitiesAPIURL, "application/json", bytes.NewBuffer(requestBody))
 	if err != nil {
-		return nil, fmt.Errorf("Error fetching cities: %v", err)
+		return nil, fmt.Errorf("error fetching cities: %v", err)
 	}
 	defer resp.Body.Close()
 
@@ -43,11 +51,11 @@ func GetCitiesByCountry(country string) ([]string, error) {
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&cityResponse); err != nil {
-		return nil, fmt.Errorf("Error decoding cities response: %v", err)
+		return nil, fmt.Errorf("error decoding cities response: %v", err)
 	}
 
 	if cityResponse.Error {
-		return nil, fmt.Errorf("Error fetching cities: %s", cityResponse.Msg)
+		return nil, fmt.Errorf("error fetching cities: %s", cityResponse.Msg)
 	}
 
 	return cityResponse.Data, nil

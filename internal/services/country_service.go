@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"proh2052-group6/internal/config"
 	"strings"
 )
 
@@ -15,7 +16,7 @@ type Country struct {
 
 var (
 	countryHTTPClient = http.DefaultClient
-	CountriesAPIURL   = "https://restcountries.com/v3.1/all"
+	//CountriesAPIURL   = "https://restcountries.com/v3.1/all"
 )
 
 func SetCountryHTTPClient(client *http.Client) {
@@ -23,11 +24,11 @@ func SetCountryHTTPClient(client *http.Client) {
 }
 
 func SetCountriesAPIURL(url string) {
-	CountriesAPIURL = url
+	config.CountriesAPIURL = url
 }
 
 func GetCountries(searchQuery string) ([]Country, error) {
-	resp, err := countryHTTPClient.Get(CountriesAPIURL)
+	resp, err := countryHTTPClient.Get(config.CountriesAPIURL)
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching countries: %v", err)
 	}
