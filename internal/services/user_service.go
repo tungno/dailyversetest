@@ -4,14 +4,12 @@ package services
 import (
 	"context"
 	"fmt"
+	"proh2052-group6/internal/repositories"
 	"strings"
 	"time"
 
 	"proh2052-group6/pkg/models"
 	"proh2052-group6/pkg/utils"
-
-	"cloud.google.com/go/firestore"
-	"google.golang.org/api/iterator"
 )
 
 type UserServiceInterface interface {
@@ -26,14 +24,14 @@ type UserServiceInterface interface {
 }
 
 type UserService struct {
-	DB    DatabaseInterface
-	Email EmailServiceInterface
+	UserRepo repositories.UserRepository
+	Email    EmailServiceInterface
 }
 
-func NewUserService(db DatabaseInterface, email EmailServiceInterface) UserServiceInterface {
+func NewUserService(userRepo repositories.UserRepository, emailService EmailServiceInterface) UserServiceInterface {
 	return &UserService{
-		DB:    db,
-		Email: email,
+		UserRepo: userRepo,
+		Email:    emailService,
 	}
 }
 
@@ -44,8 +42,8 @@ func (us *UserService) Signup(ctx context.Context, user *models.User) error {
 	}
 
 	// Check if email already exists
-	doc, err := us.DB.Collection("users").Doc(user.Email).Get(ctx)
-	if err == nil && doc.Exists() {
+	existingUser, err := us.UserRepo.GetUserByEmail(ctx, user.Email)
+	if err == nil && existingUser != nil {
 		return fmt.Errorf("Email already registered")
 	}
 
@@ -64,7 +62,7 @@ func (us *UserService) Signup(ctx context.Context, user *models.User) error {
 	user.OTPExpiresAt = time.Now().Add(5 * time.Minute)
 
 	// Save user to DB
-	_, err = us.DB.Collection("users").Doc(user.Email).Set(ctx, user)
+	err = us.UserRepo.CreateUser(ctx, user)
 	if err != nil {
 		return fmt.Errorf("Failed to create user: %v", err)
 	}
@@ -80,14 +78,9 @@ func (us *UserService) Signup(ctx context.Context, user *models.User) error {
 }
 
 func (us *UserService) Login(ctx context.Context, loginData *models.LoginRequest) (string, error) {
-	doc, err := us.DB.Collection("users").Doc(loginData.Email).Get(ctx)
-	if err != nil || !doc.Exists() {
+	user, err := us.UserRepo.GetUserByEmail(ctx, loginData.Email)
+	if err != nil || user == nil {
 		return "", fmt.Errorf("Email or password is incorrect")
-	}
-
-	var user models.User
-	if err := doc.DataTo(&user); err != nil {
-		return "", fmt.Errorf("Failed to parse user data")
 	}
 
 	if !user.IsVerified {
@@ -109,14 +102,9 @@ func (us *UserService) Login(ctx context.Context, loginData *models.LoginRequest
 
 func (us *UserService) ResendOTP(ctx context.Context, email string) error {
 	// Fetch user data
-	doc, err := us.DB.Collection("users").Doc(email).Get(ctx)
-	if err != nil || !doc.Exists() {
+	user, err := us.UserRepo.GetUserByEmail(ctx, email)
+	if err != nil || user == nil {
 		return fmt.Errorf("Email not registered")
-	}
-
-	var user models.User
-	if err := doc.DataTo(&user); err != nil {
-		return fmt.Errorf("Failed to parse user data")
 	}
 
 	if user.IsVerified {
@@ -128,10 +116,11 @@ func (us *UserService) ResendOTP(ctx context.Context, email string) error {
 	user.OTPExpiresAt = time.Now().Add(5 * time.Minute)
 
 	// Update the user with new OTP
-	_, err = us.DB.Collection("users").Doc(email).Set(ctx, map[string]interface{}{
+	updates := map[string]interface{}{
 		"OTP":          user.OTP,
 		"OTPExpiresAt": user.OTPExpiresAt,
-	}, firestore.MergeAll)
+	}
+	err = us.UserRepo.UpdateUser(ctx, email, updates)
 	if err != nil {
 		return fmt.Errorf("Failed to update OTP")
 	}
@@ -147,14 +136,9 @@ func (us *UserService) ResendOTP(ctx context.Context, email string) error {
 }
 
 func (us *UserService) VerifyEmail(ctx context.Context, email, otp string) (string, error) {
-	doc, err := us.DB.Collection("users").Doc(email).Get(ctx)
-	if err != nil || !doc.Exists() {
+	user, err := us.UserRepo.GetUserByEmail(ctx, email)
+	if err != nil || user == nil {
 		return "", fmt.Errorf("Invalid email or OTP")
-	}
-
-	var user models.User
-	if err := doc.DataTo(&user); err != nil {
-		return "", fmt.Errorf("Failed to parse user data")
 	}
 
 	if user.IsVerified {
@@ -170,10 +154,12 @@ func (us *UserService) VerifyEmail(ctx context.Context, email, otp string) (stri
 	}
 
 	// Update user as verified
-	_, err = us.DB.Collection("users").Doc(email).Set(ctx, map[string]interface{}{
-		"IsVerified": true,
-		"OTP":        nil,
-	}, firestore.MergeAll)
+	updates := map[string]interface{}{
+		"IsVerified":   true,
+		"OTP":          nil,
+		"OTPExpiresAt": nil,
+	}
+	err = us.UserRepo.UpdateUser(ctx, email, updates)
 	if err != nil {
 		return "", fmt.Errorf("Failed to update user verification status")
 	}
@@ -189,14 +175,9 @@ func (us *UserService) VerifyEmail(ctx context.Context, email, otp string) (stri
 
 func (us *UserService) ForgotPassword(ctx context.Context, email string) error {
 	// Fetch user data
-	doc, err := us.DB.Collection("users").Doc(email).Get(ctx)
-	if err != nil || !doc.Exists() {
+	user, err := us.UserRepo.GetUserByEmail(ctx, email)
+	if err != nil || user == nil {
 		// For security, we don't reveal whether the email exists
-		return nil
-	}
-
-	var user models.User
-	if err := doc.DataTo(&user); err != nil {
 		return nil
 	}
 
@@ -205,10 +186,11 @@ func (us *UserService) ForgotPassword(ctx context.Context, email string) error {
 	user.OTPExpiresAt = time.Now().Add(5 * time.Minute)
 
 	// Update the user with new OTP
-	_, err = us.DB.Collection("users").Doc(email).Set(ctx, map[string]interface{}{
+	updates := map[string]interface{}{
 		"OTP":          user.OTP,
 		"OTPExpiresAt": user.OTPExpiresAt,
-	}, firestore.MergeAll)
+	}
+	err = us.UserRepo.UpdateUser(ctx, email, updates)
 	if err != nil {
 		return fmt.Errorf("Failed to update OTP")
 	}
@@ -224,14 +206,9 @@ func (us *UserService) ForgotPassword(ctx context.Context, email string) error {
 }
 
 func (us *UserService) ResetPassword(ctx context.Context, email, otp, newPassword string) error {
-	doc, err := us.DB.Collection("users").Doc(email).Get(ctx)
-	if err != nil || !doc.Exists() {
+	user, err := us.UserRepo.GetUserByEmail(ctx, email)
+	if err != nil || user == nil {
 		return fmt.Errorf("Invalid email or OTP")
-	}
-
-	var user models.User
-	if err := doc.DataTo(&user); err != nil {
-		return fmt.Errorf("Failed to parse user data")
 	}
 
 	if user.OTP != otp {
@@ -249,11 +226,12 @@ func (us *UserService) ResetPassword(ctx context.Context, email, otp, newPasswor
 	hashedPassword := utils.HashPassword(newPassword)
 
 	// Update the user's password and clear OTP
-	_, err = us.DB.Collection("users").Doc(email).Set(ctx, map[string]interface{}{
+	updates := map[string]interface{}{
 		"Password":     hashedPassword,
 		"OTP":          nil,
 		"OTPExpiresAt": nil,
-	}, firestore.MergeAll)
+	}
+	err = us.UserRepo.UpdateUser(ctx, email, updates)
 	if err != nil {
 		return fmt.Errorf("Failed to reset password")
 	}
@@ -262,14 +240,9 @@ func (us *UserService) ResetPassword(ctx context.Context, email, otp, newPasswor
 }
 
 func (us *UserService) GetUserInfo(ctx context.Context, userEmail string) (map[string]string, error) {
-	doc, err := us.DB.Collection("users").Doc(userEmail).Get(ctx)
-	if err != nil || !doc.Exists() {
+	user, err := us.UserRepo.GetUserByEmail(ctx, userEmail)
+	if err != nil || user == nil {
 		return nil, fmt.Errorf("User not found")
-	}
-
-	var user models.User
-	if err := doc.DataTo(&user); err != nil {
-		return nil, fmt.Errorf("Failed to parse user data")
 	}
 
 	userInfo := map[string]string{
@@ -283,24 +256,13 @@ func (us *UserService) GetUserInfo(ctx context.Context, userEmail string) (map[s
 }
 
 func (us *UserService) SearchUsersByUsername(ctx context.Context, userEmail, query string) ([]map[string]string, error) {
-	iter := us.DB.Collection("users").Where("UsernameLower", ">=", strings.ToLower(query)).Where("UsernameLower", "<=", strings.ToLower(query)+"\uf8ff").Documents(ctx)
-	defer iter.Stop()
+	users, err := us.UserRepo.SearchUsersByUsername(ctx, query)
+	if err != nil {
+		return nil, fmt.Errorf("Failed to search users")
+	}
 
 	var results []map[string]string
-	for {
-		doc, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("Failed to search users")
-		}
-
-		var user models.User
-		if err := doc.DataTo(&user); err != nil {
-			continue
-		}
-
+	for _, user := range users {
 		// Exclude the requesting user from the results
 		if user.Email == userEmail {
 			continue

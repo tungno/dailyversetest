@@ -5,9 +5,8 @@ import (
 	"context"
 	"fmt"
 
+	"proh2052-group6/internal/repositories"
 	"proh2052-group6/pkg/utils"
-
-	"cloud.google.com/go/firestore"
 )
 
 type ProfileServiceInterface interface {
@@ -16,31 +15,37 @@ type ProfileServiceInterface interface {
 }
 
 type ProfileService struct {
-	DB DatabaseInterface
+	UserRepo repositories.UserRepository
 }
 
-func NewProfileService(db DatabaseInterface) ProfileServiceInterface {
-	return &ProfileService{DB: db}
+func NewProfileService(userRepo repositories.UserRepository) ProfileServiceInterface {
+	return &ProfileService{UserRepo: userRepo}
 }
 
 func (ps *ProfileService) GetProfile(ctx context.Context, userEmail string) (map[string]interface{}, error) {
-	doc, err := ps.DB.Collection("users").Doc(userEmail).Get(ctx)
+	user, err := ps.UserRepo.GetUserByEmail(ctx, userEmail)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to get profile")
 	}
 
-	var profileData map[string]interface{}
-	doc.DataTo(&profileData)
+	// Convert user struct to map[string]interface{}
+	profileData := map[string]interface{}{
+		"Email":    user.Email,
+		"Username": user.Username,
+		"Country":  user.Country,
+		"City":     user.City,
+		// Include other fields as needed
+	}
+
 	return profileData, nil
 }
 
 func (ps *ProfileService) UpdateProfile(ctx context.Context, userEmail string, updatedData map[string]interface{}) error {
-	doc, err := ps.DB.Collection("users").Doc(userEmail).Get(ctx)
+	user, err := ps.UserRepo.GetUserByEmail(ctx, userEmail)
 	if err != nil {
 		return fmt.Errorf("Failed to retrieve user data")
 	}
-	userData := doc.Data()
-	storedHashedPassword := userData["Password"].(string)
+	storedHashedPassword := user.Password
 
 	// Ensure the current password is provided for all updates
 	currentPassword, ok := updatedData["CurrentPassword"].(string)
@@ -56,11 +61,12 @@ func (ps *ProfileService) UpdateProfile(ctx context.Context, userEmail string, u
 		updatedData["Password"] = utils.HashPassword(newPassword)
 	}
 
+	// Remove fields that should not be updated directly
 	delete(updatedData, "CurrentPassword")
 	delete(updatedData, "NewPassword")
 	delete(updatedData, "Email") // Prevent email from being updated
 
-	_, err = ps.DB.Collection("users").Doc(userEmail).Set(ctx, updatedData, firestore.MergeAll)
+	err = ps.UserRepo.UpdateUser(ctx, userEmail, updatedData)
 	if err != nil {
 		return fmt.Errorf("Failed to update profile")
 	}

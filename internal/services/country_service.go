@@ -13,8 +13,21 @@ type Country struct {
 	Code string `json:"code"`
 }
 
+var (
+	countryHTTPClient = http.DefaultClient
+	CountriesAPIURL   = "https://restcountries.com/v3.1/all"
+)
+
+func SetCountryHTTPClient(client *http.Client) {
+	countryHTTPClient = client
+}
+
+func SetCountriesAPIURL(url string) {
+	CountriesAPIURL = url
+}
+
 func GetCountries(searchQuery string) ([]Country, error) {
-	resp, err := http.Get("https://restcountries.com/v3.1/all")
+	resp, err := countryHTTPClient.Get(CountriesAPIURL)
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching countries: %v", err)
 	}
@@ -24,7 +37,7 @@ func GetCountries(searchQuery string) ([]Country, error) {
 		Name struct {
 			Common string `json:"common"`
 		} `json:"name"`
-		Cca2 string `json:"cca2"`
+		CCA2 string `json:"cca2"`
 	}
 
 	if err := json.NewDecoder(resp.Body).Decode(&countriesData); err != nil {
@@ -37,7 +50,7 @@ func GetCountries(searchQuery string) ([]Country, error) {
 		if strings.HasPrefix(countryName, searchQuery) {
 			countries = append(countries, Country{
 				Name: country.Name.Common,
-				Code: country.Cca2,
+				Code: country.CCA2,
 			})
 		}
 	}

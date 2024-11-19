@@ -6,9 +6,8 @@ import (
 	"fmt"
 	"time"
 
+	"proh2052-group6/internal/repositories"
 	"proh2052-group6/pkg/models"
-
-	"google.golang.org/api/iterator"
 )
 
 type JournalServiceInterface interface {
@@ -20,11 +19,11 @@ type JournalServiceInterface interface {
 }
 
 type JournalService struct {
-	DB DatabaseInterface
+	JournalRepo repositories.JournalRepository
 }
 
-func NewJournalService(db DatabaseInterface) JournalServiceInterface {
-	return &JournalService{DB: db}
+func NewJournalService(journalRepo repositories.JournalRepository) JournalServiceInterface {
+	return &JournalService{JournalRepo: journalRepo}
 }
 
 func (js *JournalService) CreateJournal(ctx context.Context, journal *models.Journal) error {
@@ -35,78 +34,21 @@ func (js *JournalService) CreateJournal(ctx context.Context, journal *models.Jou
 	}
 	journal.Date = journalDate.Format("2006-01-02")
 
-	userDocRef := js.DB.Collection("users").Doc(journal.Email).Collection("journals")
-	docRef, _, err := userDocRef.Add(ctx, journal)
-	if err != nil {
-		return fmt.Errorf("Failed to create journal")
-	}
-
-	journal.JournalID = docRef.ID
-	_, err = docRef.Set(ctx, journal)
-	if err != nil {
-		return fmt.Errorf("Failed to update journal with JournalID")
-	}
-
-	return nil
+	return js.JournalRepo.CreateJournal(ctx, journal)
 }
 
 func (js *JournalService) GetJournal(ctx context.Context, userEmail, journalID string) (*models.Journal, error) {
-	doc, err := js.DB.Collection("users").Doc(userEmail).Collection("journals").Doc(journalID).Get(ctx)
-	if err != nil || !doc.Exists() {
-		return nil, fmt.Errorf("Journal not found")
-	}
-
-	var journal models.Journal
-	err = doc.DataTo(&journal)
-	if err != nil {
-		return nil, fmt.Errorf("Failed to parse journal data")
-	}
-
-	return &journal, nil
+	return js.JournalRepo.GetJournal(ctx, userEmail, journalID)
 }
 
 func (js *JournalService) UpdateJournal(ctx context.Context, journal *models.Journal) error {
-	docRef := js.DB.Collection("users").Doc(journal.Email).Collection("journals").Doc(journal.JournalID)
-	_, err := docRef.Set(ctx, journal)
-	if err != nil {
-		return fmt.Errorf("Failed to update journal")
-	}
-	return nil
+	return js.JournalRepo.UpdateJournal(ctx, journal)
 }
 
 func (js *JournalService) DeleteJournal(ctx context.Context, userEmail, journalID string) error {
-	docRef := js.DB.Collection("users").Doc(userEmail).Collection("journals").Doc(journalID)
-	_, err := docRef.Delete(ctx)
-	if err != nil {
-		return fmt.Errorf("Failed to delete journal")
-	}
-	return nil
+	return js.JournalRepo.DeleteJournal(ctx, userEmail, journalID)
 }
 
 func (js *JournalService) GetAllJournals(ctx context.Context, userEmail string) ([]models.Journal, error) {
-	userDocRef := js.DB.Collection("users").Doc(userEmail).Collection("journals")
-	iter := userDocRef.Documents(ctx)
-
-	var journals []models.Journal
-
-	for {
-		doc, err := iter.Next()
-		if err == iterator.Done {
-			break
-		}
-		if err != nil {
-			return nil, fmt.Errorf("Failed to retrieve journals")
-		}
-
-		var journal models.Journal
-		err = doc.DataTo(&journal)
-		if err != nil {
-			return nil, fmt.Errorf("Failed to parse journal data")
-		}
-
-		journal.JournalID = doc.Ref.ID
-		journals = append(journals, journal)
-	}
-
-	return journals, nil
+	return js.JournalRepo.GetAllJournals(ctx, userEmail)
 }

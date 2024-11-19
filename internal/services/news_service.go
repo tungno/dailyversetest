@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+
+	"proh2052-group6/internal/repositories"
 )
 
 type NewsServiceInterface interface {
@@ -14,46 +16,55 @@ type NewsServiceInterface interface {
 }
 
 type NewsService struct {
-	DB DatabaseInterface
+	UserRepo                  repositories.UserRepository
+	HTTPClient                *http.Client
+	NewsAPIURL                string
+	GetCountryAndLanguageCode func(string) (string, string, error)
 }
 
-func NewNewsService() NewsServiceInterface {
-	return &NewsService{}
+func NewNewsService(userRepo repositories.UserRepository) NewsServiceInterface {
+	return &NewsService{
+		UserRepo:                  userRepo,
+		HTTPClient:                http.DefaultClient,
+		NewsAPIURL:                "https://newsdata.io/api/1/news",
+		GetCountryAndLanguageCode: GetCountryAndLanguageCode,
+	}
 }
 
 var newsAPIKey = os.Getenv("NEWS_API_KEY")
 
 func (ns *NewsService) FetchNews(ctx context.Context, userEmail, mode, country, query string) ([]map[string]interface{}, error) {
+	var url string
+
 	if mode == "local" && country == "" {
 		// Fetch country from user profile
-		doc, err := ns.DB.Collection("users").Doc(userEmail).Get(ctx)
-		if err != nil {
+		user, err := ns.UserRepo.GetUserByEmail(ctx, userEmail)
+		if err != nil || user == nil {
 			return nil, fmt.Errorf("Failed to fetch user profile")
 		}
 
-		if profileCountry, ok := doc.Data()["Country"].(string); ok && profileCountry != "" {
-			country = profileCountry
+		if user.Country != "" {
+			country = user.Country
 		} else {
 			return nil, fmt.Errorf("Country not found in user profile")
 		}
 	}
 
-	var url string
 	if mode == "local" && country != "" {
-		countryCode, languageCode, err := getCountryAndLanguageCode(country)
+		countryCode, languageCode, err := ns.GetCountryAndLanguageCode(country)
 		if err != nil {
-			return nil, fmt.Errorf("Invalid country for local news")
+			return nil, fmt.Errorf("Invalid country for local news: %v", err)
 		}
-		url = fmt.Sprintf("https://newsdata.io/api/1/news?country=%s&language=%s&apikey=%s", countryCode, languageCode, newsAPIKey)
+		url = fmt.Sprintf("%s?country=%s&language=%s&apikey=%s", ns.NewsAPIURL, countryCode, languageCode, newsAPIKey)
 	} else {
-		url = fmt.Sprintf("https://newsdata.io/api/1/news?language=en&apikey=%s", newsAPIKey)
+		url = fmt.Sprintf("%s?language=en&apikey=%s", ns.NewsAPIURL, newsAPIKey)
 	}
 
 	if query != "" {
 		url += fmt.Sprintf("&q=%s", query)
 	}
 
-	resp, err := http.Get(url)
+	resp, err := ns.HTTPClient.Get(url)
 	if err != nil {
 		return nil, fmt.Errorf("Failed to fetch news")
 	}
@@ -69,11 +80,4 @@ func (ns *NewsService) FetchNews(ctx context.Context, userEmail, mode, country, 
 	}
 
 	return result.Results, nil
-}
-
-// Helper functions...
-
-func getCountryAndLanguageCode(countryName string) (string, string, error) {
-	// Implement mapping
-	return "", "", nil
 }

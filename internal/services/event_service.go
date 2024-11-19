@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"proh2052-group6/internal/repositories"
 	"proh2052-group6/pkg/models"
 )
 
@@ -19,11 +20,11 @@ type EventServiceInterface interface {
 }
 
 type EventService struct {
-	DB DatabaseInterface
+	EventRepo repositories.EventRepository
 }
 
-func NewEventService(db DatabaseInterface) EventServiceInterface {
-	return &EventService{DB: db}
+func NewEventService(eventRepo repositories.EventRepository) EventServiceInterface {
+	return &EventService{EventRepo: eventRepo}
 }
 
 func (es *EventService) CreateEvent(ctx context.Context, event *models.Event) error {
@@ -40,81 +41,31 @@ func (es *EventService) CreateEvent(ctx context.Context, event *models.Event) er
 	}
 	event.Date = eventDate.Format("2006-01-02")
 
-	// Add the event to Firestore under the user's events subcollection
-	userDocRef := es.DB.Collection("users").Doc(event.Email).Collection("events")
-	docRef, _, err := userDocRef.Add(ctx, event)
-	if err != nil {
-		return fmt.Errorf("Failed to create event")
-	}
-
-	event.EventID = docRef.ID
-	_, err = docRef.Set(ctx, event)
-	if err != nil {
-		return fmt.Errorf("Failed to update event with EventID")
-	}
-
-	return nil
+	// Delegate to repository
+	return es.EventRepo.CreateEvent(ctx, event)
 }
 
 func (es *EventService) GetEvent(ctx context.Context, userEmail, eventID string) (*models.Event, error) {
-	docRef := es.DB.Collection("users").Doc(userEmail).Collection("events").Doc(eventID)
-	doc, err := docRef.Get(ctx)
-	if err != nil || !doc.Exists() {
-		return nil, fmt.Errorf("Event not found")
-	}
-
-	var event models.Event
-	err = doc.DataTo(&event)
+	event, err := es.EventRepo.GetEvent(ctx, userEmail, eventID)
 	if err != nil {
-		return nil, fmt.Errorf("Error parsing event data")
+		return nil, err
 	}
 
 	if event.Email != userEmail {
 		return nil, fmt.Errorf("Unauthorized to access this event")
 	}
 
-	return &event, nil
+	return event, nil
 }
 
 func (es *EventService) UpdateEvent(ctx context.Context, event *models.Event) error {
-	docRef := es.DB.Collection("users").Doc(event.Email).Collection("events").Doc(event.EventID)
-	_, err := docRef.Set(ctx, event)
-	if err != nil {
-		return fmt.Errorf("Failed to update event")
-	}
-	return nil
+	return es.EventRepo.UpdateEvent(ctx, event)
 }
 
 func (es *EventService) DeleteEvent(ctx context.Context, userEmail, eventID string) error {
-	docRef := es.DB.Collection("users").Doc(userEmail).Collection("events").Doc(eventID)
-	_, err := docRef.Delete(ctx)
-	if err != nil {
-		return fmt.Errorf("Failed to delete event")
-	}
-	return nil
+	return es.EventRepo.DeleteEvent(ctx, userEmail, eventID)
 }
 
 func (es *EventService) GetAllEvents(ctx context.Context, userEmail string) ([]models.Event, error) {
-	var events []models.Event
-
-	// Query the user's own events
-	userEventsDocs, err := es.DB.Collection("users").Doc(userEmail).Collection("events").Documents(ctx).GetAll()
-	if err != nil {
-		return nil, fmt.Errorf("Failed to fetch user's events")
-	}
-
-	for _, doc := range userEventsDocs {
-		var event models.Event
-		err := doc.DataTo(&event)
-		if err != nil {
-			return nil, fmt.Errorf("Error parsing event data")
-		}
-
-		event.EventID = doc.Ref.ID
-		events = append(events, event)
-	}
-
-	// You can implement fetching public events from friends here...
-
-	return events, nil
+	return es.EventRepo.GetAllEvents(ctx, userEmail)
 }

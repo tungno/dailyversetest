@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"proh2052-group6/internal/repositories"
 	"time"
 
 	"github.com/gorilla/mux"
@@ -31,14 +32,20 @@ func main() {
 	}
 	defer dbClient.Close()
 
+	// Initialize repositories
+	userRepository := repositories.NewFirestoreUserRepository(dbClient)
+	friendRepository := repositories.NewFirestoreFriendRepository(dbClient)
+	eventRepository := repositories.NewFirestoreEventRepository(dbClient)
+	journalRepository := repositories.NewFirestoreJournalRepository(dbClient)
+
 	// Initialize services
 	emailService := services.NewSMTPEmailService()
-	userService := services.NewUserService(dbClient, emailService)
-	eventService := services.NewEventService(dbClient)
-	friendService := services.NewFriendService(dbClient)
-	journalService := services.NewJournalService(dbClient)
-	newsService := services.NewNewsService()
-	profileService := services.NewProfileService(dbClient)
+	userService := services.NewUserService(userRepository, emailService)
+	eventService := services.NewEventService(eventRepository)
+	friendService := services.NewFriendService(userRepository, friendRepository)
+	journalService := services.NewJournalService(journalRepository)
+	newsService := services.NewNewsService(userRepository)
+	profileService := services.NewProfileService(userRepository)
 
 	// Initialize handlers
 	userHandler := handlers.NewUserHandler(userService)
