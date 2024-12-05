@@ -12,7 +12,7 @@ type User struct {
 	Username      string    `json:"username"`
 	UsernameLower string    `json:"usernameLower"`
 	Email         string    `json:"email"`
-	Password      string    `json:"password"`
+	Password      string    `json:"-"`
 	Country       string    `json:"country"`
 	City          string    `json:"city"`
 	ImageURL      string    `json:"imageUrl,omitempty"`
@@ -64,4 +64,22 @@ type Friend struct {
 type Claims struct {
 	Email string `json:"email"`
 	jwt.StandardClaims
+}
+
+// TimetableEvent represents the structure of events received from NTNU timetable API
+type TimetableEvent struct {
+	CourseCode  string `json:"courseCode"`
+	CourseName  string `json:"courseName"`
+	Description string `json:"description"`
+	Date        string `json:"date"`      // Format: "YYYY-MM-DD"
+	StartTime   string `json:"startTime"` // Format: "HH:MM"
+	EndTime     string `json:"endTime"`   // Format: "HH:MM"
+}
+
+// UserSummary model to send minimal user data to frontend
+type UserSummary struct {
+	Username string `json:"username"`
+	Email    string `json:"email"`
+	Country  string `json:"country"`
+	City     string `json:"city"`
 }

@@ -3,6 +3,8 @@ package repositories
 
 import (
 	"context"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 	"proh2052-group6/pkg/models"
 
 	"cloud.google.com/go/firestore"
@@ -27,6 +29,9 @@ func (fr *FirestoreFriendRepository) GetFriendRequest(ctx context.Context, sende
 	docID := senderEmail + "_" + recipientEmail
 	doc, err := fr.Client.Collection("friends").Doc(docID).Get(ctx)
 	if err != nil {
+		if status.Code(err) == codes.NotFound {
+			return nil, nil // Return nil without error if document not found
+		}
 		return nil, err
 	}
 	var friend models.Friend
@@ -90,10 +95,13 @@ func (fr *FirestoreFriendRepository) GetFriends(ctx context.Context, userEmail s
 	return friends, nil
 }
 
+// GetPendingFriendRequests fetches pending friend requests for a user
 func (fr *FirestoreFriendRepository) GetPendingFriendRequests(ctx context.Context, userEmail string) ([]models.Friend, error) {
-	var pendingRequests []models.Friend
+	var friends []models.Friend
+
+	// Query where FriendEmail is userEmail and Status is "pending"
 	iter := fr.Client.Collection("friends").Where("FriendEmail", "==", userEmail).Where("Status", "==", "pending").Documents(ctx)
-	defer iter.Stop()
+
 	for {
 		doc, err := iter.Next()
 		if err == iterator.Done {
@@ -102,11 +110,14 @@ func (fr *FirestoreFriendRepository) GetPendingFriendRequests(ctx context.Contex
 		if err != nil {
 			return nil, err
 		}
+
 		var friend models.Friend
 		if err := doc.DataTo(&friend); err != nil {
 			continue
 		}
-		pendingRequests = append(pendingRequests, friend)
+
+		friends = append(friends, friend)
 	}
-	return pendingRequests, nil
+
+	return friends, nil
 }

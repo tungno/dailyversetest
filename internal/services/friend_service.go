@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"proh2052-group6/internal/repositories"
 	"proh2052-group6/pkg/models"
+	"proh2052-group6/pkg/utils"
 )
 
 type FriendServiceInterface interface {
@@ -13,7 +14,7 @@ type FriendServiceInterface interface {
 	AcceptFriendRequest(ctx context.Context, userEmail, username string) error
 	GetFriendsList(ctx context.Context, userEmail string) ([]models.User, error)
 	RemoveFriend(ctx context.Context, userEmail, username string) error
-	GetPendingFriendRequests(ctx context.Context, userEmail string) ([]models.User, error)
+	GetPendingFriendRequests(ctx context.Context, userEmail string) ([]models.UserSummary, error)
 	DeclineFriendRequest(ctx context.Context, userEmail, username string) error
 	CancelFriendRequest(ctx context.Context, userEmail, username string) error
 }
@@ -30,12 +31,21 @@ func NewFriendService(userRepo repositories.UserRepository, friendRepo repositor
 	}
 }
 
-func (fs *FriendService) SendFriendRequest(ctx context.Context, userEmail, username string) error {
-	// Retrieve the email of the user by username
-	friendUser, err := fs.UserRepo.GetUserByUsername(ctx, username)
-	if err != nil {
+func (fs *FriendService) SendFriendRequest(ctx context.Context, userEmail, identifier string) error {
+	var friendUser *models.User
+	var err error
+
+	// Determine if identifier is an email
+	if utils.IsValidEmail(identifier) {
+		friendUser, err = fs.UserRepo.GetUserByEmail(ctx, identifier)
+	} else {
+		friendUser, err = fs.UserRepo.GetUserByUsername(ctx, identifier)
+	}
+
+	if err != nil || friendUser == nil {
 		return fmt.Errorf("User not found")
 	}
+
 	friendEmail := friendUser.Email
 
 	// Prevent sending a friend request to self
@@ -63,11 +73,18 @@ func (fs *FriendService) SendFriendRequest(ctx context.Context, userEmail, usern
 	return nil
 }
 
-func (fs *FriendService) AcceptFriendRequest(ctx context.Context, userEmail, username string) error {
-	// Retrieve the email of the user by username
-	senderUser, err := fs.UserRepo.GetUserByUsername(ctx, username)
-	if err != nil {
-		return fmt.Errorf("User not found")
+func (fs *FriendService) AcceptFriendRequest(ctx context.Context, userEmail, identifier string) error {
+	var senderUser *models.User
+	var err error
+
+	// Try to get user by username first
+	senderUser, err = fs.UserRepo.GetUserByUsername(ctx, identifier)
+	if err != nil || senderUser == nil {
+		// If not found, try by email
+		senderUser, err = fs.UserRepo.GetUserByEmail(ctx, identifier)
+		if err != nil || senderUser == nil {
+			return fmt.Errorf("User not found")
+		}
 	}
 	senderEmail := senderUser.Email
 
@@ -137,28 +154,38 @@ func (fs *FriendService) RemoveFriend(ctx context.Context, userEmail, username s
 	return nil
 }
 
-func (fs *FriendService) GetPendingFriendRequests(ctx context.Context, userEmail string) ([]models.User, error) {
-	var requests []models.User
-
-	// Get all pending friend requests where the recipient is the user
-	pendingRequests, err := fs.FriendRepo.GetPendingFriendRequests(ctx, userEmail)
+// GetPendingFriendRequests retrieves pending friend requests for a user
+func (fs *FriendService) GetPendingFriendRequests(ctx context.Context, userEmail string) ([]models.UserSummary, error) {
+	// Fetch pending friend requests where the recipient is the user
+	friendRequests, err := fs.FriendRepo.GetPendingFriendRequests(ctx, userEmail)
 	if err != nil {
-		return nil, fmt.Errorf("Error fetching pending friend requests")
+		return nil, err
 	}
 
-	for _, friendRequest := range pendingRequests {
-		senderEmail := friendRequest.Email
+	var pendingRequests []models.UserSummary
+	for _, fr := range friendRequests {
+		// Get the sender's email (the person who sent the request)
+		senderEmail := fr.Email
 
-		// Fetch user data
-		senderUser, err := fs.UserRepo.GetUserByEmail(ctx, senderEmail)
+		// Fetch user details of the sender
+		user, err := fs.UserRepo.GetUserByEmail(ctx, senderEmail)
 		if err != nil {
+			// Skip if user not found or any error occurs
 			continue
 		}
 
-		requests = append(requests, *senderUser)
+		// Create a UserSummary to exclude sensitive fields
+		userSummary := models.UserSummary{
+			Username: user.Username,
+			Email:    user.Email,
+			Country:  user.Country,
+			City:     user.City,
+		}
+
+		pendingRequests = append(pendingRequests, userSummary)
 	}
 
-	return requests, nil
+	return pendingRequests, nil
 }
 
 func (fs *FriendService) DeclineFriendRequest(ctx context.Context, userEmail, username string) error {

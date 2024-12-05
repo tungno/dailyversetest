@@ -47,6 +47,7 @@ func main() {
 	newsService := services.NewNewsService(userRepository)
 	profileService := services.NewProfileService(userRepository)
 	cityService := services.NewCityService()
+	timetableService := services.NewTimetableService(eventRepository)
 
 	// Initialize handlers
 	userHandler := handlers.NewUserHandler(userService)
@@ -57,6 +58,7 @@ func main() {
 	profileHandler := handlers.NewProfileHandler(profileService)
 	countryHandler := handlers.NewCountryHandler()
 	cityHandler := handlers.NewCityHandler(cityService, userService)
+	timetableHandler := handlers.NewTimetableHandler(timetableService)
 
 	// Setup router
 	router := mux.NewRouter()
@@ -105,6 +107,9 @@ func main() {
 	router.Handle("/api/journal/update", middleware.JwtAuthMiddleware(journalHandler.UpdateJournal)).Methods("PUT")
 	router.Handle("/api/journal/delete", middleware.JwtAuthMiddleware(journalHandler.DeleteJournal)).Methods("DELETE")
 	router.Handle("/api/journals", middleware.JwtAuthMiddleware(journalHandler.GetAllJournals)).Methods("GET")
+
+	// Timetable route
+	router.Handle("/api/import-ntnu-timetable", middleware.JwtAuthMiddleware(timetableHandler.ImportTimetable)).Methods("POST")
 
 	// Wrap handlers with CORS middleware
 	c := cors.New(cors.Options{

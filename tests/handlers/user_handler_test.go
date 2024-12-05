@@ -76,6 +76,7 @@ func TestUserHandler_Signup(t *testing.T) {
 		if savedUser.Username != user.Username {
 			t.Errorf("Expected saved user username to be '%s', got '%s'", user.Username, savedUser.Username)
 		}
+
 	}
 
 	// Check that an email was sent

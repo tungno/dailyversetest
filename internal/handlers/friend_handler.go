@@ -19,17 +19,27 @@ func NewFriendHandler(fs services.FriendServiceInterface) *FriendHandler {
 
 func (fh *FriendHandler) SendFriendRequest(w http.ResponseWriter, r *http.Request) {
 	var requestData struct {
-		Username string `json:"username"`
+		UsernameOrEmail string `json:"usernameOrEmail"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
 		utils.WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	userEmail := r.Context().Value("userEmail").(string)
+	if requestData.UsernameOrEmail == "" {
+		utils.WriteJSONError(w, "Username or Email is required", http.StatusBadRequest)
+		return
+	}
 
-	if err := fh.FriendService.SendFriendRequest(r.Context(), userEmail, requestData.Username); err != nil {
-		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+	userEmail, ok := r.Context().Value("userEmail").(string)
+	if !ok {
+		utils.WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := fh.FriendService.SendFriendRequest(r.Context(), userEmail, requestData.UsernameOrEmail)
+	if err != nil {
+		utils.WriteJSONError(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 
@@ -38,17 +48,33 @@ func (fh *FriendHandler) SendFriendRequest(w http.ResponseWriter, r *http.Reques
 
 func (fh *FriendHandler) AcceptFriendRequest(w http.ResponseWriter, r *http.Request) {
 	var requestData struct {
-		Username string `json:"username"`
+		UsernameOrEmail string `json:"usernameOrEmail"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
 		utils.WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	userEmail := r.Context().Value("userEmail").(string)
+	if requestData.UsernameOrEmail == "" {
+		utils.WriteJSONError(w, "Username or Email is required", http.StatusBadRequest)
+		return
+	}
 
-	if err := fh.FriendService.AcceptFriendRequest(r.Context(), userEmail, requestData.Username); err != nil {
-		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+	userEmail, ok := r.Context().Value("userEmail").(string)
+	if !ok {
+		utils.WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := fh.FriendService.AcceptFriendRequest(r.Context(), userEmail, requestData.UsernameOrEmail)
+	if err != nil {
+		// Determine the type of error and return appropriate status code
+		switch err.Error() {
+		case "User not found", "Friend request not found":
+			utils.WriteJSONError(w, err.Error(), http.StatusNotFound)
+		default:
+			utils.WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 
@@ -100,17 +126,33 @@ func (fh *FriendHandler) GetPendingFriendRequests(w http.ResponseWriter, r *http
 
 func (fh *FriendHandler) DeclineFriendRequest(w http.ResponseWriter, r *http.Request) {
 	var requestData struct {
-		Username string `json:"username"`
+		UsernameOrEmail string `json:"usernameOrEmail"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&requestData); err != nil {
 		utils.WriteJSONError(w, "Invalid request body", http.StatusBadRequest)
 		return
 	}
 
-	userEmail := r.Context().Value("userEmail").(string)
+	if requestData.UsernameOrEmail == "" {
+		utils.WriteJSONError(w, "Username or Email is required", http.StatusBadRequest)
+		return
+	}
 
-	if err := fh.FriendService.DeclineFriendRequest(r.Context(), userEmail, requestData.Username); err != nil {
-		utils.WriteJSONError(w, err.Error(), http.StatusInternalServerError)
+	userEmail, ok := r.Context().Value("userEmail").(string)
+	if !ok {
+		utils.WriteJSONError(w, "Unauthorized", http.StatusUnauthorized)
+		return
+	}
+
+	err := fh.FriendService.DeclineFriendRequest(r.Context(), userEmail, requestData.UsernameOrEmail)
+	if err != nil {
+		// Determine the type of error and return appropriate status code
+		switch err.Error() {
+		case "User not found", "Friend request not found":
+			utils.WriteJSONError(w, err.Error(), http.StatusNotFound)
+		default:
+			utils.WriteJSONError(w, err.Error(), http.StatusBadRequest)
+		}
 		return
 	}
 

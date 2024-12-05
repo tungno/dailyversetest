@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"os"
+	"regexp"
 	"time"
 	"unicode"
 
@@ -90,4 +91,10 @@ func WriteJSONError(w http.ResponseWriter, message string, code int) {
 	json.NewEncoder(w).Encode(map[string]string{
 		"message": message,
 	})
+}
+
+// IsValidEmail checks if a string is a valid email address.
+func IsValidEmail(email string) bool {
+	emailRegex := regexp.MustCompile(`^[a-zA-Z0-9.!#$%&'*+/=?^_` + "`" + `{|}~-]+@[a-zA-Z0-9-]+(?:\.[a-zA-Z0-9-]+)*$`)
+	return emailRegex.MatchString(email)
 }

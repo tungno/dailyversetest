@@ -263,14 +263,12 @@ func TestJournalHandler_GetAllJournals(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	// Set the userEmail in the context
 	ctx := context.WithValue(req.Context(), "userEmail", userEmail)
 	req = req.WithContext(ctx)
 
 	// Create a ResponseRecorder to record the response
 	rr := httptest.NewRecorder()
-
 	// Call the handler
 	handler := http.HandlerFunc(journalHandler.GetAllJournals)
 	handler.ServeHTTP(rr, req)
@@ -287,7 +285,6 @@ func TestJournalHandler_GetAllJournals(t *testing.T) {
 	if err != nil {
 		t.Errorf("Failed to parse response body: %v", err)
 	}
-
 	if len(response) != 2 {
 		t.Errorf("Expected 2 journals, got %d", len(response))
 	}
