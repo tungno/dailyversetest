@@ -1,4 +1,17 @@
-// cmd/main.go
+/**
+ *  Main entry point for the DailyVerse application. This file sets up the HTTP server,
+ *  initializes services, repositories, and handlers, and defines routes for various endpoints.
+ *
+ *  @file      main.go
+ *  @project   DailyVerse
+ *  @framework Go HTTP Server
+ *  @authors
+ *      - Aayush
+ *      - Tung
+ *      - Boss
+ *      - Majd
+ */
+
 package main
 
 import (
@@ -18,27 +31,28 @@ import (
 )
 
 func main() {
-	// Load environment variables
+	// Load environment variables from a .env file
 	if err := godotenv.Load(); err != nil {
 		log.Print("No .env file found")
 	}
 
+	// Create a context for service initialization
 	ctx := context.Background()
 
-	// Initialize Firestore
+	// Initialize Firestore client for database access
 	dbClient, err := services.NewFirestoreClient(ctx)
 	if err != nil {
 		log.Fatalf("Failed to initialize Firestore: %v", err)
 	}
-	defer dbClient.Close()
+	defer dbClient.Close() // Ensure Firestore client is closed when the application exits
 
-	// Initialize repositories
+	// Initialize repositories for data access
 	userRepository := repositories.NewFirestoreUserRepository(dbClient)
 	friendRepository := repositories.NewFirestoreFriendRepository(dbClient)
 	eventRepository := repositories.NewFirestoreEventRepository(dbClient)
 	journalRepository := repositories.NewFirestoreJournalRepository(dbClient)
 
-	// Initialize services
+	// Initialize services for business logic
 	emailService := services.NewSMTPEmailService()
 	userService := services.NewUserService(userRepository, emailService)
 	eventService := services.NewEventService(eventRepository)
@@ -49,7 +63,7 @@ func main() {
 	cityService := services.NewCityService()
 	timetableService := services.NewTimetableService(eventRepository)
 
-	// Initialize handlers
+	// Initialize HTTP handlers
 	userHandler := handlers.NewUserHandler(userService)
 	eventHandler := handlers.NewEventHandler(eventService)
 	friendHandler := handlers.NewFriendHandler(friendService)
@@ -60,9 +74,10 @@ func main() {
 	cityHandler := handlers.NewCityHandler(cityService, userService)
 	timetableHandler := handlers.NewTimetableHandler(timetableService)
 
-	// Setup router
+	// Set up the HTTP router
 	router := mux.NewRouter()
 
+	// Define API routes
 	// User routes
 	router.Handle("/api/signup", middleware.RateLimitMiddleware(http.HandlerFunc(userHandler.Signup))).Methods("POST")
 	router.Handle("/api/login", middleware.RateLimitMiddleware(http.HandlerFunc(userHandler.Login))).Methods("POST")
@@ -88,13 +103,13 @@ func main() {
 	router.Handle("/api/friends/decline", middleware.JwtAuthMiddleware(friendHandler.DeclineFriendRequest)).Methods("POST")
 	router.Handle("/api/friends/cancel", middleware.JwtAuthMiddleware(friendHandler.CancelFriendRequest)).Methods("POST")
 
-	// Search for users by username
+	// User search
 	router.Handle("/api/users/search", middleware.JwtAuthMiddleware(userHandler.SearchUsersByUsername)).Methods("GET")
 
 	// Profile routes
 	router.Handle("/api/profile", middleware.JwtAuthMiddleware(profileHandler.ProfileHandler)).Methods("GET", "PUT")
 
-	// Country and City routes
+	// Country and city routes
 	router.HandleFunc("/api/countries", countryHandler.GetCountries).Methods("GET")
 	router.HandleFunc("/api/cities", cityHandler.GetCities).Methods("GET")
 
@@ -111,18 +126,18 @@ func main() {
 	// Timetable route
 	router.Handle("/api/import-ntnu-timetable", middleware.JwtAuthMiddleware(timetableHandler.ImportTimetable)).Methods("POST")
 
-	// Wrap handlers with CORS middleware
+	// Apply CORS middleware
 	c := cors.New(cors.Options{
-		AllowedOrigins:   []string{"*"}, // Adjust as needed
+		AllowedOrigins:   []string{"*"}, // Allow all origins for development (adjust in production)
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE"},
 		AllowedHeaders:   []string{"Authorization", "Content-Type"},
 		AllowCredentials: true,
 	})
 
-	// Start the server
+	// Configure and start the HTTP server
 	port := os.Getenv("PORT")
 	if port == "" {
-		port = "8080"
+		port = "8080" // Default port
 	}
 	handler := c.Handler(router)
 	srv := &http.Server{
@@ -131,6 +146,7 @@ func main() {
 		WriteTimeout: 15 * time.Second,
 		ReadTimeout:  15 * time.Second,
 	}
+
 	log.Printf("Server running on port %s", port)
 	if err := srv.ListenAndServe(); err != nil {
 		log.Fatalf("Server failed to start: %v", err)

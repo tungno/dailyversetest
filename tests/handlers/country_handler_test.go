@@ -1,4 +1,40 @@
-// tests/handlers/country_handler_test.go
+/**
+ *  Tests for CountryHandler, validating its behavior for fetching country data via an external API.
+ *  The test suite includes scenarios for successful retrieval, short search queries, and handling
+ *  external API errors.
+ *
+ *  @file       country_handler_test.go
+ *  @package    handlers_test
+ *
+ *  @tests
+ *  - TestCountryHandler_GetCountries: Verifies the handler retrieves and filters country data correctly.
+ *  - TestCountryHandler_GetCountries_ShortSearch: Ensures the handler properly handles short search queries.
+ *  - TestCountryHandler_GetCountries_ExternalAPIError: Validates the handler's behavior when the external API fails.
+ *
+ *  @dependencies
+ *  - httptest.Server: Used to mock the external API's behavior during testing.
+ *  - handlers.NewCountryHandler: The handler being tested.
+ *  - services.SetCountriesAPIURL: A function to temporarily override the external API endpoint during tests.
+ *  - config.CountriesAPIURL: The global configuration for the external API endpoint.
+ *
+ *  @behavior
+ *  - Verifies HTTP response codes and response bodies for each scenario.
+ *  - Mocks external API responses to simulate various scenarios (success and error cases).
+ *  - Uses helper functions like `equalCountries` to validate expected vs actual results.
+ *
+ *  @example
+ *  ```
+ *  // Run tests
+ *  go test ./tests/handlers -v
+ *  ```
+ *
+ *  @authors
+ *      - Aayush
+ *      - Tung
+ *      - Boss
+ *      - Majd
+ */
+
 package handlers_test
 
 import (

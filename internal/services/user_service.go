@@ -1,4 +1,55 @@
-// internal/services/user_service.go
+/**
+ *  UserService provides business logic for managing user accounts, including authentication,
+ *  password recovery, email verification, and user search functionality. It integrates with
+ *  the UserRepository and EmailService to perform operations.
+ *
+ *  @interface UserServiceInterface
+ *  @inherits None
+ *
+ *  @methods
+ *  - Signup(ctx, user)                      - Handles user registration with validation and email verification.
+ *  - Login(ctx, loginData)                  - Authenticates a user and generates a JWT token.
+ *  - ResendOTP(ctx, email)                  - Resends the OTP for email verification.
+ *  - VerifyEmail(ctx, email, otp)           - Verifies a user's email using an OTP.
+ *  - ForgotPassword(ctx, email)             - Sends an OTP to reset the user's password.
+ *  - ResetPassword(ctx, email, otp, newPwd) - Resets the user's password using an OTP.
+ *  - GetUserInfo(ctx, userEmail)            - Fetches the user's profile information.
+ *  - SearchUsersByUsername(ctx, userEmail, query) - Searches for users by username.
+ *
+ *  @dependencies
+ *  - repositories.UserRepository: Repository for interacting with user data in the database.
+ *  - EmailServiceInterface: Service for sending emails to users.
+ *  - utils: Utility package for password hashing, OTP generation, and JWT token handling.
+ *
+ *  @behaviors
+ *  - Ensures secure handling of user data, including password hashing and OTP validation.
+ *  - Provides detailed error messages for user-related operations.
+ *  - Prevents unauthorized access by validating user inputs and tokens.
+ *
+ *  @example
+ *  ```
+ *  // Register a new user
+ *  user := &models.User{
+ *      Email: "user@example.com",
+ *      Username: "JohnDoe",
+ *      Country: "Norway",
+ *      City: "Oslo",
+ *      Password: "SecurePassword123",
+ *  }
+ *  err := userService.Signup(ctx, user)
+ *
+ *  // Login an existing user
+ *  token, err := userService.Login(ctx, &models.LoginRequest{
+ *      Email: "user@example.com",
+ *      Password: "SecurePassword123",
+ *  })
+ *  ```
+ *
+ *  @file      user_service.go
+ *  @project   DailyVerse
+ *  @framework Go HTTP Server with Email Integration
+ */
+
 package services
 
 import (
@@ -12,6 +63,7 @@ import (
 	"proh2052-group6/pkg/utils"
 )
 
+// UserServiceInterface defines the contract for user management operations.
 type UserServiceInterface interface {
 	Signup(ctx context.Context, user *models.User) error
 	Login(ctx context.Context, loginData *models.LoginRequest) (string, error)
@@ -23,11 +75,13 @@ type UserServiceInterface interface {
 	SearchUsersByUsername(ctx context.Context, userEmail, query string) ([]map[string]string, error)
 }
 
+// UserService implements UserServiceInterface and interacts with repositories and email services.
 type UserService struct {
-	UserRepo repositories.UserRepository
-	Email    EmailServiceInterface
+	UserRepo repositories.UserRepository // Repository for user-related database operations.
+	Email    EmailServiceInterface       // Email service for sending OTPs and notifications.
 }
 
+// NewUserService initializes a new UserService with a UserRepository and EmailService.
 func NewUserService(userRepo repositories.UserRepository, emailService EmailServiceInterface) UserServiceInterface {
 	return &UserService{
 		UserRepo: userRepo,
@@ -35,39 +89,31 @@ func NewUserService(userRepo repositories.UserRepository, emailService EmailServ
 	}
 }
 
+// Signup registers a new user with validation, OTP generation, and email verification.
 func (us *UserService) Signup(ctx context.Context, user *models.User) error {
-	// Validate inputs
 	if user.Country == "" || user.City == "" || user.Email == "" || user.Username == "" || user.Password == "" {
 		return fmt.Errorf("Country, City, Email, Username, and Password are required")
 	}
 
-	// Check if email already exists
 	existingUser, err := us.UserRepo.GetUserByEmail(ctx, user.Email)
 	if err == nil && existingUser != nil {
 		return fmt.Errorf("Email already registered")
 	}
 
-	// Validate password
 	if !utils.IsValidPassword(user.Password) {
 		return fmt.Errorf("Password does not meet complexity requirements")
 	}
 
-	// Hash password
 	user.Password = utils.HashPassword(user.Password)
 	user.IsVerified = false
 	user.UsernameLower = strings.ToLower(user.Username)
-
-	// Generate OTP
 	user.OTP = utils.GenerateOTP()
 	user.OTPExpiresAt = time.Now().Add(5 * time.Minute)
 
-	// Save user to DB
-	err = us.UserRepo.CreateUser(ctx, user)
-	if err != nil {
+	if err := us.UserRepo.CreateUser(ctx, user); err != nil {
 		return fmt.Errorf("Failed to create user: %v", err)
 	}
 
-	// Send OTP email
 	subject := "Your Verification Code"
 	body := fmt.Sprintf("Your OTP for email verification is: %s. It will expire in 5 minutes.", user.OTP)
 	if err := us.Email.SendEmail(user.Email, subject, body); err != nil {
@@ -77,6 +123,7 @@ func (us *UserService) Signup(ctx context.Context, user *models.User) error {
 	return nil
 }
 
+// Login authenticates a user and returns a JWT token if successful.
 func (us *UserService) Login(ctx context.Context, loginData *models.LoginRequest) (string, error) {
 	user, err := us.UserRepo.GetUserByEmail(ctx, loginData.Email)
 	if err != nil || user == nil {
@@ -91,7 +138,6 @@ func (us *UserService) Login(ctx context.Context, loginData *models.LoginRequest
 		return "", fmt.Errorf("Email or password is incorrect")
 	}
 
-	// Generate JWT
 	token, err := utils.GenerateJWT(user.Email)
 	if err != nil {
 		return "", fmt.Errorf("Failed to generate token")
@@ -100,8 +146,8 @@ func (us *UserService) Login(ctx context.Context, loginData *models.LoginRequest
 	return token, nil
 }
 
+// ResendOTP sends a new OTP to the user's email for verification.
 func (us *UserService) ResendOTP(ctx context.Context, email string) error {
-	// Fetch user data
 	user, err := us.UserRepo.GetUserByEmail(ctx, email)
 	if err != nil || user == nil {
 		return fmt.Errorf("Email not registered")
@@ -111,21 +157,17 @@ func (us *UserService) ResendOTP(ctx context.Context, email string) error {
 		return fmt.Errorf("Email is already verified")
 	}
 
-	// Generate new OTP
 	user.OTP = utils.GenerateOTP()
 	user.OTPExpiresAt = time.Now().Add(5 * time.Minute)
 
-	// Update the user with new OTP
 	updates := map[string]interface{}{
 		"OTP":          user.OTP,
 		"OTPExpiresAt": user.OTPExpiresAt,
 	}
-	err = us.UserRepo.UpdateUser(ctx, email, updates)
-	if err != nil {
+	if err := us.UserRepo.UpdateUser(ctx, email, updates); err != nil {
 		return fmt.Errorf("Failed to update OTP")
 	}
 
-	// Send OTP email
 	subject := "Your New Verification Code"
 	body := fmt.Sprintf("Your new OTP is: %s. It will expire in 5 minutes.", user.OTP)
 	if err := us.Email.SendEmail(email, subject, body); err != nil {
@@ -135,6 +177,7 @@ func (us *UserService) ResendOTP(ctx context.Context, email string) error {
 	return nil
 }
 
+// VerifyEmail verifies the user's email using the provided OTP and updates their status.
 func (us *UserService) VerifyEmail(ctx context.Context, email, otp string) (string, error) {
 	user, err := us.UserRepo.GetUserByEmail(ctx, email)
 	if err != nil || user == nil {
@@ -153,18 +196,15 @@ func (us *UserService) VerifyEmail(ctx context.Context, email, otp string) (stri
 		return "", fmt.Errorf("OTP has expired")
 	}
 
-	// Update user as verified
 	updates := map[string]interface{}{
 		"IsVerified":   true,
 		"OTP":          nil,
 		"OTPExpiresAt": nil,
 	}
-	err = us.UserRepo.UpdateUser(ctx, email, updates)
-	if err != nil {
+	if err := us.UserRepo.UpdateUser(ctx, email, updates); err != nil {
 		return "", fmt.Errorf("Failed to update user verification status")
 	}
 
-	// Generate JWT
 	token, err := utils.GenerateJWT(email)
 	if err != nil {
 		return "", fmt.Errorf("Failed to generate token")

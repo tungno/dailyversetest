@@ -1,4 +1,60 @@
-// tests/handlers/friend_handler_test.go
+/**
+ *  FriendHandler Test Suite
+ *
+ *  This test suite validates the behavior of the `FriendHandler`, ensuring proper functionality
+ *  for friend-related operations, including sending, accepting, declining, and removing friend requests,
+ *  as well as retrieving friend lists and pending requests. The tests use mocked repositories and services
+ *  to isolate the handler logic from external dependencies.
+ *
+ *  @dependencies
+ *  - mocks.MockUserRepository: Mock implementation of the UserRepository for simulating user data.
+ *  - mocks.MockFriendRepository: Mock implementation of the FriendRepository for simulating friend relationships.
+ *  - services.FriendService: Core service for managing friend-related operations.
+ *  - handlers.FriendHandler: HTTP handler for friend endpoints.
+ *  - httptest: Go's HTTP testing package for simulating HTTP requests and responses.
+ *  - testify/assert: Library for making test assertions clean and readable.
+ *
+ *  @testcases
+ *  - TestSendFriendRequestHandler: Validates the ability to send a friend request.
+ *  - TestAcceptFriendRequestHandler: Verifies that pending friend requests can be accepted.
+ *  - TestGetFriendsListHandler: Checks the retrieval of a user's accepted friend list.
+ *  - TestRemoveFriendHandler: Ensures a user can remove an existing friend.
+ *  - TestGetPendingFriendRequestsHandler: Validates retrieval of pending friend requests.
+ *  - TestDeclineFriendRequestHandler: Confirms that a user can decline a pending friend request.
+ *  - TestCancelFriendRequestHandler: Tests the ability to cancel a sent friend request.
+ *
+ *  @behaviors
+ *  - Uses mock repositories to simulate user and friend data for isolated testing.
+ *  - Ensures correct HTTP status codes are returned based on request outcomes.
+ *  - Verifies that appropriate changes are reflected in the mock repositories.
+ *  - Handles edge cases, such as missing users or invalid friend request states.
+ *
+ *  @example
+ *  ```
+ *  // Test sending a friend request
+ *  mockUsers := map[string]*models.User{
+ *      "user1@example.com": {Email: "user1@example.com", Username: "user1"},
+ *      "user2@example.com": {Email: "user2@example.com", Username: "user2"},
+ *  }
+ *  userRepo := mocks.NewMockUserRepository(mockUsers)
+ *  friendRepo := mocks.NewMockFriendRepository(make(map[string]*models.Friend))
+ *
+ *  friendService := services.NewFriendService(userRepo, friendRepo)
+ *  friendHandler := handlers.NewFriendHandler(friendService)
+ *
+ *  req, _ := http.NewRequest("POST", "/api/friends/add", bytes.NewReader(body))
+ *  ctx := context.WithValue(req.Context(), "userEmail", "user1@example.com")
+ *  req = req.WithContext(ctx)
+ *
+ *  rr := httptest.NewRecorder()
+ *  http.HandlerFunc(friendHandler.SendFriendRequest).ServeHTTP(rr, req)
+ *  ```
+ *
+ *  @file      friend_handler_test.go
+ *  @project   DailyVerse
+ *  @framework Go HTTP Testing with Mock Services
+ */
+
 package handlers_test
 
 import (

@@ -1,4 +1,43 @@
-// tests/handlers/journal_handler_test.go
+/**
+ *  JournalHandler Tests validate the behavior of the JournalHandler methods.
+ *  They use a mock JournalService to isolate the handler logic and verify interactions with the service.
+ *
+ *  @file       journal_handler_test.go
+ *  @package    handlers_test
+ *
+ *  @test_cases
+ *  - TestJournalHandler_CreateJournal      - Tests creating a new journal entry.
+ *  - TestJournalHandler_GetJournal         - Tests retrieving a specific journal entry.
+ *  - TestJournalHandler_UpdateJournal      - Tests updating an existing journal entry.
+ *  - TestJournalHandler_DeleteJournal      - Tests deleting a journal entry.
+ *  - TestJournalHandler_GetAllJournals     - Tests retrieving all journal entries for a user.
+ *
+ *  @dependencies
+ *  - mocks.NewMockJournalService: Mock implementation of JournalService for testing.
+ *  - httptest: Provides utilities for testing HTTP handlers.
+ *  - context.WithValue: Adds user-specific context values for testing purposes.
+ *  - encoding/json: Handles JSON marshalling and unmarshalling.
+ *
+ *  @behaviors
+ *  - Verifies HTTP status codes for each handler.
+ *  - Validates request/response data consistency.
+ *  - Confirms the correct service methods are called during handler execution.
+ *
+ *  @example
+ *  ```
+ *  req := httptest.NewRequest("POST", "/api/journal/save", body)
+ *  rr := httptest.NewRecorder()
+ *  handler := http.HandlerFunc(journalHandler.CreateJournal)
+ *  handler.ServeHTTP(rr, req)
+ *  ```
+ *
+ *  @authors
+ *      - Aayush
+ *      - Tung
+ *      - Boss
+ *      - Majd
+ */
+
 package handlers_test
 
 import (
@@ -15,43 +54,42 @@ import (
 )
 
 func TestJournalHandler_CreateJournal(t *testing.T) {
-	// Create a mock journal service
+	// Setup mock JournalService and JournalHandler
 	mockJournalService := mocks.NewMockJournalService()
 	journalHandler := handlers.NewJournalHandler(mockJournalService)
 
-	// Prepare the request body
+	// Prepare request body
 	journal := models.Journal{
 		Date:    "2023-10-15",
 		Content: "Today was a good day.",
 	}
 	requestBody, _ := json.Marshal(journal)
 
-	// Create a new HTTP request
+	// Create HTTP request
 	req, err := http.NewRequest("POST", "/api/journal/save", bytes.NewBuffer(requestBody))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Set the userEmail in the context
+	// Inject userEmail into context
 	userEmail := "test@example.com"
 	ctx := context.WithValue(req.Context(), "userEmail", userEmail)
 	req = req.WithContext(ctx)
 
-	// Create a ResponseRecorder to record the response
+	// Create ResponseRecorder to capture response
 	rr := httptest.NewRecorder()
 
-	// Call the handler
+	// Invoke handler
 	handler := http.HandlerFunc(journalHandler.CreateJournal)
 	handler.ServeHTTP(rr, req)
 
-	// Check the status code
+	// Assert status code
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
-	// Check the response body
+	// Parse and validate response
 	var response map[string]string
 	err = json.Unmarshal(rr.Body.Bytes(), &response)
 	if err != nil {
@@ -62,24 +100,22 @@ func TestJournalHandler_CreateJournal(t *testing.T) {
 	if response["message"] != expectedMessage {
 		t.Errorf("Expected message '%s', got '%s'", expectedMessage, response["message"])
 	}
-
 	if response["journalID"] == "" {
 		t.Errorf("Expected journalID in response")
 	}
 
-	// Verify that the journal was saved in the mock service
+	// Verify journal saved in mock service
 	savedJournal, err := mockJournalService.GetJournal(context.Background(), userEmail, response["journalID"])
 	if err != nil {
 		t.Errorf("Journal was not saved in the service: %v", err)
 	}
-
 	if savedJournal.Content != journal.Content {
 		t.Errorf("Expected journal content '%s', got '%s'", journal.Content, savedJournal.Content)
 	}
 }
 
 func TestJournalHandler_GetJournal(t *testing.T) {
-	// Create a mock journal service
+	// Setup mock JournalService and JournalHandler
 	mockJournalService := mocks.NewMockJournalService()
 	journalHandler := handlers.NewJournalHandler(mockJournalService)
 
@@ -94,30 +130,29 @@ func TestJournalHandler_GetJournal(t *testing.T) {
 	}
 	mockJournalService.Journals[journalID] = journal
 
-	// Create a new HTTP request
+	// Create HTTP request
 	req, err := http.NewRequest("GET", "/api/journal?journalID="+journalID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Set the userEmail in the context
+	// Inject userEmail into context
 	ctx := context.WithValue(req.Context(), "userEmail", userEmail)
 	req = req.WithContext(ctx)
 
-	// Create a ResponseRecorder to record the response
+	// Create ResponseRecorder
 	rr := httptest.NewRecorder()
 
-	// Call the handler
+	// Invoke handler
 	handler := http.HandlerFunc(journalHandler.GetJournal)
 	handler.ServeHTTP(rr, req)
 
-	// Check the status code
+	// Assert status code
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
-	// Check the response body
+	// Parse and validate response
 	var response models.Journal
 	err = json.Unmarshal(rr.Body.Bytes(), &response)
 	if err != nil {
@@ -127,7 +162,6 @@ func TestJournalHandler_GetJournal(t *testing.T) {
 	if response.JournalID != journalID {
 		t.Errorf("Expected journalID '%s', got '%s'", journalID, response.JournalID)
 	}
-
 	if response.Content != journal.Content {
 		t.Errorf("Expected journal content '%s', got '%s'", journal.Content, response.Content)
 	}

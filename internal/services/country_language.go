@@ -1,4 +1,27 @@
-// internal/services/country_language.go
+/**
+ *  CountryLanguageMap provides a mapping of country names to their ISO 3166-1 alpha-2
+ *  country codes and primary language codes. It enables efficient retrieval of these
+ *  codes for use in applications like news APIs and localization services.
+ *
+ *  @map       CountryLanguageMap
+ *  @methods
+ *  - GetCountryAndLanguageCode(countryName)  - Retrieves the country code and primary language code for a given country.
+ *
+ *  @dependencies
+ *  - strings.Title: Used to normalize country names for case-insensitive matching.
+ *  - fmt.Errorf: Provides formatted error messages for unmatched countries.
+ *
+ *  @file      country_language.go
+ *  @project   DailyVerse
+ *  @purpose   Country and language mapping utility for localization and API integration.
+ *  @framework Go Standard Library
+ *  @authors
+ *      - Aayush
+ *      - Tung
+ *      - Boss
+ *      - Majd
+ */
+
 package services
 
 import (
@@ -203,16 +226,23 @@ var CountryLanguageMap = map[string]struct {
 	"Zimbabwe":                         {"ZW", "en"},
 }
 
-// GetCountryAndLanguageCode retrieves the country code and primary language code from the map.
+// GetCountryAndLanguageCode retrieves the country code and primary language code for a given country name.
+// Parameters:
+//   - countryName (string): The name of the country (case-insensitive).
+//
+// Returns:
+//   - string: ISO country code (e.g., "US" for the United States).
+//   - string: Primary language code (e.g., "en" for English).
+//   - error: Returns an error if the country is not found in the map.
 func GetCountryAndLanguageCode(countryName string) (string, string, error) {
-	// Normalize the country name for case-insensitive matching
+	// Normalize the country name for case-insensitive matching.
 	normalizedCountryName := strings.Title(strings.ToLower(countryName))
 
-	// Check if the country is in the map
+	// Retrieve the country and language codes from the map.
 	if entry, exists := CountryLanguageMap[normalizedCountryName]; exists {
 		return strings.ToLower(entry.CountryCode), strings.ToLower(entry.LanguageCode), nil
 	}
 
-	// Return an error if the country is not found
+	// Return an error if the country is not found.
 	return "", "", fmt.Errorf("country not found in map: %s", countryName)
 }

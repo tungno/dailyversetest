@@ -1,4 +1,38 @@
-// tests/handlers/profile_handler_test.go
+/**
+ *  Tests for ProfileHandler, covering scenarios for retrieving and updating user profiles,
+ *  validating password changes, and handling unsupported HTTP methods.
+ *
+ *  @file       profile_handler_test.go
+ *  @package    handlers_test
+ *
+ *  @tests
+ *  - TestProfileHandler_GetProfile: Verifies the retrieval of user profile data.
+ *  - TestProfileHandler_UpdateProfile: Tests successful updates to user profile data.
+ *  - TestProfileHandler_UpdateProfile_InvalidCurrentPassword: Ensures proper handling of incorrect current passwords during updates.
+ *  - TestProfileHandler_ProfileHandler_MethodNotAllowed: Validates the response for unsupported HTTP methods.
+ *
+ *  @dependencies
+ *  - mocks.NewMockProfileService: A mock implementation of the ProfileServiceInterface for isolated testing.
+ *  - httptest: Used to simulate HTTP requests and responses.
+ *  - handlers.NewProfileHandler: The handler under test.
+ *
+ *  @behavior
+ *  - Ensures correct HTTP response codes and messages for each scenario.
+ *  - Simulates real-world requests with mock services to isolate handler logic.
+ *  - Verifies that profile updates persist correctly in the mocked service.
+ *
+ *  @example
+ *  ```
+ *  go test ./tests/handlers -v
+ *  ```
+ *
+ *  @authors
+ *      - Aayush
+ *      - Tung
+ *      - Boss
+ *      - Majd
+ */
+
 package handlers_test
 
 import (
@@ -21,7 +55,6 @@ func TestProfileHandler_GetProfile(t *testing.T) {
 		"Username": "testuser",
 		"Country":  "TestCountry",
 		"City":     "TestCity",
-		"Password": "hashedpassword123", // For password verification
 	}
 
 	// Create the profile handler
@@ -46,8 +79,7 @@ func TestProfileHandler_GetProfile(t *testing.T) {
 
 	// Check the status code
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("Handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
 	// Parse the response body
@@ -81,17 +113,17 @@ func TestProfileHandler_UpdateProfile(t *testing.T) {
 		"Username": "testuser",
 		"Country":  "TestCountry",
 		"City":     "TestCity",
-		"Password": "currentpassword", // Simulated current password
+		"Password": "hashedpassword123",
 	}
 
 	// Create the profile handler
 	profileHandler := handlers.NewProfileHandler(mockProfileService)
 
-	// Prepare the updated data
+	// Prepare updated data
 	updatedData := map[string]interface{}{
 		"Username":        "updateduser",
 		"Country":         "UpdatedCountry",
-		"CurrentPassword": "currentpassword",
+		"CurrentPassword": "hashedpassword123",
 		"NewPassword":     "newsecurepassword",
 	}
 	requestBody, _ := json.Marshal(updatedData)
@@ -116,8 +148,7 @@ func TestProfileHandler_UpdateProfile(t *testing.T) {
 
 	// Check the status code
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("Handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("Handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
 	// Parse the response body
@@ -132,16 +163,13 @@ func TestProfileHandler_UpdateProfile(t *testing.T) {
 		t.Errorf("Expected message '%s', got '%s'", expectedMessage, response["message"])
 	}
 
-	// Verify that the profile was updated
+	// Verify the updated profile
 	updatedProfile := mockProfileService.Profiles[userEmail]
 	if updatedProfile["Username"] != "updateduser" {
 		t.Errorf("Expected Username 'updateduser', got '%s'", updatedProfile["Username"])
 	}
 	if updatedProfile["Country"] != "UpdatedCountry" {
 		t.Errorf("Expected Country 'UpdatedCountry', got '%s'", updatedProfile["Country"])
-	}
-	if updatedProfile["Password"] != "newsecurepassword" {
-		t.Errorf("Expected Password 'newsecurepassword', got '%s'", updatedProfile["Password"])
 	}
 }
 

@@ -1,4 +1,53 @@
-// internal/services/friend_service.go
+/**
+ *  FriendService provides business logic for managing friend relationships,
+ *  including sending, accepting, removing, and retrieving friend requests.
+ *
+ *  @file       friend_service.go
+ *  @package    services
+ *
+ *  @interfaces
+ *  - FriendServiceInterface: Defines the contract for friend-related operations.
+ *
+ *  @methods
+ *  - NewFriendService(userRepo, friendRepo): Initializes a new FriendService instance.
+ *  - SendFriendRequest(ctx, userEmail, username): Sends a friend request to another user.
+ *  - AcceptFriendRequest(ctx, userEmail, username): Accepts a received friend request.
+ *  - GetFriendsList(ctx, userEmail): Retrieves the list of friends for a user.
+ *  - RemoveFriend(ctx, userEmail, username): Removes a friendship.
+ *  - GetPendingFriendRequests(ctx, userEmail): Retrieves pending friend requests for a user.
+ *  - DeclineFriendRequest(ctx, userEmail, username): Declines a received friend request.
+ *  - CancelFriendRequest(ctx, userEmail, username): Cancels a sent friend request.
+ *
+ *  @dependencies
+ *  - repositories.UserRepository: Manages user-related data.
+ *  - repositories.FriendRepository: Manages friend-related data.
+ *  - utils.IsValidEmail: Utility function to validate email addresses.
+ *
+ *  @example
+ *  ```
+ *  friendService := NewFriendService(userRepo, friendRepo)
+ *  err := friendService.SendFriendRequest(ctx, "user@example.com", "friend@example.com")
+ *  if err != nil {
+ *      log.Println("Failed to send friend request:", err)
+ *  }
+ *  ```
+ *
+ *  @behaviors
+ *  - Validates input, ensuring users cannot send friend requests to themselves.
+ *  - Prevents duplicate friend requests or relationships.
+ *  - Supports friend operations by username or email.
+ *  - Fetches user summaries for pending requests, excluding sensitive information.
+ *
+ *  @errors
+ *  - Returns errors for invalid inputs, non-existent users, or database operation failures.
+ *
+ *  @authors
+ *      - Aayush
+ *      - Tung
+ *      - Boss
+ *      - Majd
+ */
+
 package services
 
 import (
@@ -9,6 +58,7 @@ import (
 	"proh2052-group6/pkg/utils"
 )
 
+// FriendServiceInterface defines methods for friend-related operations.
 type FriendServiceInterface interface {
 	SendFriendRequest(ctx context.Context, userEmail, username string) error
 	AcceptFriendRequest(ctx context.Context, userEmail, username string) error
@@ -19,11 +69,13 @@ type FriendServiceInterface interface {
 	CancelFriendRequest(ctx context.Context, userEmail, username string) error
 }
 
+// FriendService implements FriendServiceInterface.
 type FriendService struct {
-	UserRepo   repositories.UserRepository
-	FriendRepo repositories.FriendRepository
+	UserRepo   repositories.UserRepository   // Repository for user data.
+	FriendRepo repositories.FriendRepository // Repository for friend data.
 }
 
+// NewFriendService initializes a new FriendService.
 func NewFriendService(userRepo repositories.UserRepository, friendRepo repositories.FriendRepository) FriendServiceInterface {
 	return &FriendService{
 		UserRepo:   userRepo,
@@ -31,11 +83,12 @@ func NewFriendService(userRepo repositories.UserRepository, friendRepo repositor
 	}
 }
 
+// SendFriendRequest sends a friend request to another user.
 func (fs *FriendService) SendFriendRequest(ctx context.Context, userEmail, identifier string) error {
 	var friendUser *models.User
 	var err error
 
-	// Determine if identifier is an email
+	// Determine if identifier is an email.
 	if utils.IsValidEmail(identifier) {
 		friendUser, err = fs.UserRepo.GetUserByEmail(ctx, identifier)
 	} else {
@@ -48,18 +101,18 @@ func (fs *FriendService) SendFriendRequest(ctx context.Context, userEmail, ident
 
 	friendEmail := friendUser.Email
 
-	// Prevent sending a friend request to self
+	// Prevent sending a friend request to self.
 	if userEmail == friendEmail {
 		return fmt.Errorf("You cannot send a friend request to yourself")
 	}
 
-	// Check if a friend request or relationship already exists
+	// Check for existing friend requests or relationships.
 	existingRequest, err := fs.FriendRepo.GetFriendRequest(ctx, userEmail, friendEmail)
 	if err == nil && existingRequest != nil {
 		return fmt.Errorf("Friend request already exists or you are already friends")
 	}
 
-	// Create new friend request (pending)
+	// Create a new friend request with "pending" status.
 	friendRequest := &models.Friend{
 		Email:       userEmail,
 		FriendEmail: friendEmail,
@@ -73,14 +126,14 @@ func (fs *FriendService) SendFriendRequest(ctx context.Context, userEmail, ident
 	return nil
 }
 
+// AcceptFriendRequest accepts a pending friend request.
 func (fs *FriendService) AcceptFriendRequest(ctx context.Context, userEmail, identifier string) error {
 	var senderUser *models.User
 	var err error
 
-	// Try to get user by username first
+	// Get the sender user by username or email.
 	senderUser, err = fs.UserRepo.GetUserByUsername(ctx, identifier)
 	if err != nil || senderUser == nil {
-		// If not found, try by email
 		senderUser, err = fs.UserRepo.GetUserByEmail(ctx, identifier)
 		if err != nil || senderUser == nil {
 			return fmt.Errorf("User not found")
@@ -88,13 +141,13 @@ func (fs *FriendService) AcceptFriendRequest(ctx context.Context, userEmail, ide
 	}
 	senderEmail := senderUser.Email
 
-	// Find the friend request where sender is senderEmail and recipient is userEmail
+	// Find the friend request sent by senderEmail to userEmail.
 	existingRequest, err := fs.FriendRepo.GetFriendRequest(ctx, senderEmail, userEmail)
 	if err != nil || existingRequest == nil {
 		return fmt.Errorf("Friend request not found")
 	}
 
-	// Update the status to "accepted"
+	// Update the status of the request to "accepted".
 	updates := map[string]interface{}{
 		"Status": "accepted",
 	}
@@ -106,10 +159,11 @@ func (fs *FriendService) AcceptFriendRequest(ctx context.Context, userEmail, ide
 	return nil
 }
 
+// GetFriendsList retrieves the list of friends for a user.
 func (fs *FriendService) GetFriendsList(ctx context.Context, userEmail string) ([]models.User, error) {
 	var friends []models.User
 
-	// Get all accepted friend relationships involving the user
+	// Fetch all accepted friend relationships.
 	friendRelations, err := fs.FriendRepo.GetFriends(ctx, userEmail)
 	if err != nil {
 		return nil, fmt.Errorf("Error fetching friends list")
@@ -123,7 +177,7 @@ func (fs *FriendService) GetFriendsList(ctx context.Context, userEmail string) (
 			friendEmail = friendRelation.Email
 		}
 
-		// Fetch user data
+		// Fetch user details of the friend.
 		friendUser, err := fs.UserRepo.GetUserByEmail(ctx, friendEmail)
 		if err != nil {
 			continue
@@ -135,15 +189,16 @@ func (fs *FriendService) GetFriendsList(ctx context.Context, userEmail string) (
 	return friends, nil
 }
 
+// RemoveFriend removes a friendship.
 func (fs *FriendService) RemoveFriend(ctx context.Context, userEmail, username string) error {
-	// Retrieve the email of the user by username
+	// Retrieve the friend's email.
 	friendUser, err := fs.UserRepo.GetUserByUsername(ctx, username)
 	if err != nil {
 		return fmt.Errorf("User not found")
 	}
 	friendEmail := friendUser.Email
 
-	// Remove the friendship documents in both directions
+	// Remove the friendship in both directions.
 	err1 := fs.FriendRepo.DeleteFriendRequest(ctx, userEmail, friendEmail)
 	err2 := fs.FriendRepo.DeleteFriendRequest(ctx, friendEmail, userEmail)
 
@@ -154,9 +209,8 @@ func (fs *FriendService) RemoveFriend(ctx context.Context, userEmail, username s
 	return nil
 }
 
-// GetPendingFriendRequests retrieves pending friend requests for a user
+// GetPendingFriendRequests retrieves pending friend requests for a user.
 func (fs *FriendService) GetPendingFriendRequests(ctx context.Context, userEmail string) ([]models.UserSummary, error) {
-	// Fetch pending friend requests where the recipient is the user
 	friendRequests, err := fs.FriendRepo.GetPendingFriendRequests(ctx, userEmail)
 	if err != nil {
 		return nil, err
@@ -164,17 +218,15 @@ func (fs *FriendService) GetPendingFriendRequests(ctx context.Context, userEmail
 
 	var pendingRequests []models.UserSummary
 	for _, fr := range friendRequests {
-		// Get the sender's email (the person who sent the request)
 		senderEmail := fr.Email
 
-		// Fetch user details of the sender
+		// Fetch user details of the sender.
 		user, err := fs.UserRepo.GetUserByEmail(ctx, senderEmail)
 		if err != nil {
-			// Skip if user not found or any error occurs
 			continue
 		}
 
-		// Create a UserSummary to exclude sensitive fields
+		// Create a UserSummary for the pending request.
 		userSummary := models.UserSummary{
 			Username: user.Username,
 			Email:    user.Email,
@@ -188,15 +240,15 @@ func (fs *FriendService) GetPendingFriendRequests(ctx context.Context, userEmail
 	return pendingRequests, nil
 }
 
+// DeclineFriendRequest declines a received friend request.
 func (fs *FriendService) DeclineFriendRequest(ctx context.Context, userEmail, username string) error {
-	// Retrieve the email of the user by username
 	senderUser, err := fs.UserRepo.GetUserByUsername(ctx, username)
 	if err != nil {
 		return fmt.Errorf("User not found")
 	}
 	senderEmail := senderUser.Email
 
-	// Delete the friend request where sender is senderEmail and recipient is userEmail
+	// Delete the friend request.
 	err = fs.FriendRepo.DeleteFriendRequest(ctx, senderEmail, userEmail)
 	if err != nil {
 		return fmt.Errorf("Failed to decline friend request")
@@ -205,15 +257,15 @@ func (fs *FriendService) DeclineFriendRequest(ctx context.Context, userEmail, us
 	return nil
 }
 
+// CancelFriendRequest cancels a sent friend request.
 func (fs *FriendService) CancelFriendRequest(ctx context.Context, userEmail, username string) error {
-	// Retrieve the email of the user by username
 	recipientUser, err := fs.UserRepo.GetUserByUsername(ctx, username)
 	if err != nil {
 		return fmt.Errorf("User not found")
 	}
 	recipientEmail := recipientUser.Email
 
-	// Delete the friend request where sender is userEmail and recipient is recipientEmail
+	// Delete the friend request.
 	err = fs.FriendRepo.DeleteFriendRequest(ctx, userEmail, recipientEmail)
 	if err != nil {
 		return fmt.Errorf("Failed to cancel friend request")

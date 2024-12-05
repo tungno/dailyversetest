@@ -1,4 +1,35 @@
-// tests/handlers/event_handler_test.go
+/**
+ *  EventHandler Tests validate the behavior of the EventHandler methods.
+ *  They use a mock EventService to isolate the handler logic and verify interactions with the service.
+ *
+ *  @file       event_handler_test.go
+ *  @package    handlers_test
+ *
+ *  @test_cases
+ *  - TestEventHandler_CreateEvent      - Tests the creation of an event.
+ *  - TestEventHandler_GetEvent         - Tests retrieving a specific event by ID.
+ *  - TestEventHandler_UpdateEvent      - Tests updating an existing event.
+ *  - TestEventHandler_DeleteEvent      - Tests deleting an event.
+ *  - TestEventHandler_GetAllEvents     - Tests retrieving all events for a user.
+ *
+ *  @dependencies
+ *  - mocks.NewMockEventService: Mock implementation of EventService for testing.
+ *  - httptest: Provides utilities for testing HTTP handlers.
+ *  - context.WithValue: Adds user-specific context values for testing purposes.
+ *  - encoding/json: Handles JSON marshalling and unmarshalling.
+ *
+ *  @behaviors
+ *  - Verifies HTTP status codes for each handler.
+ *  - Validates request/response data consistency.
+ *  - Confirms the correct service methods are called during handler execution.
+ *
+ *  @authors
+ *      - Aayush
+ *      - Tung
+ *      - Boss
+ *      - Majd
+ */
+
 package handlers_test
 
 import (
@@ -15,11 +46,11 @@ import (
 )
 
 func TestEventHandler_CreateEvent(t *testing.T) {
-	// Create a mock event service
+	// Setup mock EventService and EventHandler
 	mockEventService := mocks.NewMockEventService()
 	eventHandler := handlers.NewEventHandler(mockEventService)
 
-	// Prepare the request body
+	// Prepare request body
 	event := models.Event{
 		Title:       "Meeting",
 		Description: "Team meeting",
@@ -27,64 +58,60 @@ func TestEventHandler_CreateEvent(t *testing.T) {
 	}
 	requestBody, _ := json.Marshal(event)
 
-	// Create a new HTTP request
+	// Create HTTP request
 	req, err := http.NewRequest("POST", "/api/events/create", bytes.NewBuffer(requestBody))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
-	// Set the userEmail in the context
+	// Inject userEmail into context
 	userEmail := "test@example.com"
 	ctx := context.WithValue(req.Context(), "userEmail", userEmail)
 	req = req.WithContext(ctx)
 
-	// Create a ResponseRecorder to record the response
+	// Create ResponseRecorder to capture response
 	rr := httptest.NewRecorder()
 
-	// Call the handler
+	// Invoke handler
 	handler := http.HandlerFunc(eventHandler.CreateEvent)
 	handler.ServeHTTP(rr, req)
 
-	// Check the status code
+	// Assert status code
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
-	// Check the response body
+	// Parse and validate response
 	var response map[string]string
 	err = json.Unmarshal(rr.Body.Bytes(), &response)
 	if err != nil {
 		t.Errorf("Failed to parse response body: %v", err)
 	}
-
 	expectedMessage := "Event created successfully"
 	if response["message"] != expectedMessage {
 		t.Errorf("Expected message '%s', got '%s'", expectedMessage, response["message"])
 	}
-
 	if response["eventID"] == "" {
 		t.Errorf("Expected eventID in response")
 	}
 
-	// Verify that the event was saved in the mock service
+	// Verify event saved in mock service
 	savedEvent, err := mockEventService.GetEvent(context.Background(), userEmail, response["eventID"])
 	if err != nil {
 		t.Errorf("Event was not saved in the service: %v", err)
 	}
-
 	if savedEvent.Title != event.Title {
 		t.Errorf("Expected event title '%s', got '%s'", event.Title, savedEvent.Title)
 	}
 }
 
 func TestEventHandler_GetEvent(t *testing.T) {
-	// Create a mock event service
+	// Setup mock EventService and EventHandler
 	mockEventService := mocks.NewMockEventService()
 	eventHandler := handlers.NewEventHandler(mockEventService)
 
-	// Add an event to the mock service
+	// Add event to mock service
 	userEmail := "test@example.com"
 	eventID := "event123"
 	event := &models.Event{
@@ -96,40 +123,37 @@ func TestEventHandler_GetEvent(t *testing.T) {
 	}
 	mockEventService.Events[eventID] = event
 
-	// Create a new HTTP request
+	// Create HTTP request
 	req, err := http.NewRequest("GET", "/api/events/get?eventID="+eventID, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	// Set the userEmail in the context
+	// Inject userEmail into context
 	ctx := context.WithValue(req.Context(), "userEmail", userEmail)
 	req = req.WithContext(ctx)
 
-	// Create a ResponseRecorder to record the response
+	// Create ResponseRecorder
 	rr := httptest.NewRecorder()
 
-	// Call the handler
+	// Invoke handler
 	handler := http.HandlerFunc(eventHandler.GetEvent)
 	handler.ServeHTTP(rr, req)
 
-	// Check the status code
+	// Assert status code
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
-	// Check the response body
+	// Parse and validate response
 	var response models.Event
 	err = json.Unmarshal(rr.Body.Bytes(), &response)
 	if err != nil {
 		t.Errorf("Failed to parse response body: %v", err)
 	}
-
 	if response.EventID != eventID {
 		t.Errorf("Expected eventID '%s', got '%s'", eventID, response.EventID)
 	}
-
 	if response.Title != event.Title {
 		t.Errorf("Expected event title '%s', got '%s'", event.Title, response.Title)
 	}

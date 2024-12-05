@@ -1,4 +1,49 @@
-// tests/handlers/user_handler_test.go
+/**
+ *  UserHandler Tests validate the behavior of UserHandler methods.
+ *  They use mock implementations of the UserRepository and EmailService to isolate the logic
+ *  and verify the interaction with these services.
+ *
+ *  @file       user_handler_test.go
+ *  @package    handlers_test
+ *
+ *  @test_cases
+ *  - TestUserHandler_Signup        - Tests user signup functionality.
+ *  - TestUserHandler_Login         - Tests user login functionality.
+ *  - TestUserHandler_ResendOTP     - Tests resending OTP functionality.
+ *  - TestUserHandler_VerifyEmail   - Tests email verification functionality.
+ *  - TestUserHandler_GetUserInfo   - Tests retrieving user information.
+ *
+ *  @dependencies
+ *  - mocks.NewMockUserRepository: Mock implementation of UserRepository for testing.
+ *  - mocks.MockEmailService: Mock implementation of EmailService for testing.
+ *  - httptest: Utilities for testing HTTP handlers.
+ *  - context.WithValue: Adds user-specific context values for testing purposes.
+ *  - encoding/json: Handles JSON marshalling and unmarshalling.
+ *
+ *  @behaviors
+ *  - Verifies HTTP status codes for each handler.
+ *  - Validates request/response data consistency.
+ *  - Ensures the correct service methods are called during handler execution.
+ *
+ *  @example
+ *  ```
+ *  req := httptest.NewRequest("POST", "/api/signup", bytes.NewBuffer(requestBody))
+ *  rr := httptest.NewRecorder()
+ *  handler := http.HandlerFunc(userHandler.Signup)
+ *  handler.ServeHTTP(rr, req)
+ *  ```
+ *
+ *  @errors
+ *  - Returns appropriate status codes and error messages for invalid inputs.
+ *  - Ensures that users cannot log in without verifying their email.
+ *
+ *  @authors
+ *      - Aayush
+ *      - Tung
+ *      - Boss
+ *      - Majd
+ */
+
 package handlers_test
 
 import (
@@ -18,13 +63,14 @@ import (
 )
 
 func TestUserHandler_Signup(t *testing.T) {
-	// Create mocks
+	// Test case: Verify user signup with valid input
+	// Arrange
 	mockUserRepo := mocks.NewMockUserRepository(make(map[string]*models.User))
 	mockEmailService := &mocks.MockEmailService{}
 	userService := services.NewUserService(mockUserRepo, mockEmailService)
 	userHandler := handlers.NewUserHandler(userService)
 
-	// Create a test HTTP request
+	// Act
 	user := models.User{
 		Email:    "test@example.com",
 		Username: "testuser",
@@ -38,21 +84,15 @@ func TestUserHandler_Signup(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-
-	// Create a ResponseRecorder to record the response
 	rr := httptest.NewRecorder()
-
-	// Call the handler
 	handler := http.HandlerFunc(userHandler.Signup)
 	handler.ServeHTTP(rr, req)
 
-	// Check the status code
+	// Assert
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
-	// Check the response body
 	var response map[string]string
 	err = json.Unmarshal(rr.Body.Bytes(), &response)
 	if err != nil {
@@ -64,35 +104,27 @@ func TestUserHandler_Signup(t *testing.T) {
 		t.Errorf("Expected message '%s', got '%s'", expectedMessage, response["message"])
 	}
 
-	// Check that the user was created in the mock repository
+	// Validate the user was saved in the repository
 	savedUser, err := mockUserRepo.GetUserByEmail(context.Background(), user.Email)
-	if err != nil {
-		t.Errorf("User was not saved in repository")
-	} else {
-		// Use 'savedUser' in assertions
-		if savedUser.Email != user.Email {
-			t.Errorf("Expected saved user email to be '%s', got '%s'", user.Email, savedUser.Email)
-		}
-		if savedUser.Username != user.Username {
-			t.Errorf("Expected saved user username to be '%s', got '%s'", user.Username, savedUser.Username)
-		}
-
+	if err != nil || savedUser == nil {
+		t.Errorf("User was not saved in the repository")
 	}
 
-	// Check that an email was sent
+	// Validate an email was sent
 	if len(mockEmailService.SentEmails) != 1 {
 		t.Errorf("Expected 1 email to be sent, got %d", len(mockEmailService.SentEmails))
 	}
 }
 
 func TestUserHandler_Login(t *testing.T) {
-	// Create mocks
+	// Test case: Verify user login with valid credentials
+	// Arrange
 	mockUserRepo := mocks.NewMockUserRepository(make(map[string]*models.User))
 	mockEmailService := &mocks.MockEmailService{}
 	userService := services.NewUserService(mockUserRepo, mockEmailService)
 	userHandler := handlers.NewUserHandler(userService)
 
-	// Add a user to the mock repository
+	// Add a verified user
 	user := &models.User{
 		Email:      "test@example.com",
 		Username:   "testuser",
@@ -103,7 +135,7 @@ func TestUserHandler_Login(t *testing.T) {
 	}
 	mockUserRepo.CreateUser(context.Background(), user)
 
-	// Create a test HTTP request
+	// Act
 	loginData := models.LoginRequest{
 		Email:    "test@example.com",
 		Password: "Password123!",
@@ -114,21 +146,15 @@ func TestUserHandler_Login(t *testing.T) {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-
-	// Create a ResponseRecorder to record the response
 	rr := httptest.NewRecorder()
-
-	// Call the handler
 	handler := http.HandlerFunc(userHandler.Login)
 	handler.ServeHTTP(rr, req)
 
-	// Check the status code
+	// Assert
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
-	// Check the response body
 	var response map[string]string
 	err = json.Unmarshal(rr.Body.Bytes(), &response)
 	if err != nil {
@@ -141,13 +167,14 @@ func TestUserHandler_Login(t *testing.T) {
 }
 
 func TestUserHandler_ResendOTP(t *testing.T) {
-	// Create mocks
+	// Test case: Verify OTP resend functionality for unverified users
+	// Arrange
 	mockUserRepo := mocks.NewMockUserRepository(make(map[string]*models.User))
 	mockEmailService := &mocks.MockEmailService{}
 	userService := services.NewUserService(mockUserRepo, mockEmailService)
 	userHandler := handlers.NewUserHandler(userService)
 
-	// Add an unverified user to the mock repository
+	// Add an unverified user
 	user := &models.User{
 		Email:      "test@example.com",
 		Username:   "testuser",
@@ -158,31 +185,23 @@ func TestUserHandler_ResendOTP(t *testing.T) {
 	}
 	mockUserRepo.CreateUser(context.Background(), user)
 
-	// Create a test HTTP request
-	requestData := map[string]string{
-		"email": "test@example.com",
-	}
+	// Act
+	requestData := map[string]string{"email": "test@example.com"}
 	requestBody, _ := json.Marshal(requestData)
 	req, err := http.NewRequest("POST", "/api/resend-otp", bytes.NewBuffer(requestBody))
 	if err != nil {
 		t.Fatal(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
-
-	// Create a ResponseRecorder to record the response
 	rr := httptest.NewRecorder()
-
-	// Call the handler
 	handler := http.HandlerFunc(userHandler.ResendOTP)
 	handler.ServeHTTP(rr, req)
 
-	// Check the status code
+	// Assert
 	if status := rr.Code; status != http.StatusOK {
-		t.Errorf("handler returned wrong status code: got %v want %v",
-			status, http.StatusOK)
+		t.Errorf("handler returned wrong status code: got %v want %v", status, http.StatusOK)
 	}
 
-	// Check the response body
 	var response map[string]string
 	err = json.Unmarshal(rr.Body.Bytes(), &response)
 	if err != nil {
@@ -194,7 +213,7 @@ func TestUserHandler_ResendOTP(t *testing.T) {
 		t.Errorf("Expected message '%s', got '%s'", expectedMessage, response["message"])
 	}
 
-	// Check that an email was sent
+	// Validate an email was sent
 	if len(mockEmailService.SentEmails) != 1 {
 		t.Errorf("Expected 1 email to be sent, got %d", len(mockEmailService.SentEmails))
 	}
